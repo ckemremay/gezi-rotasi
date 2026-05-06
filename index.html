@@ -130,6 +130,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--pri);}
   font-size:11px;cursor:pointer;flex-shrink:0;}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* iOS PWA uyumlu tam yükseklik */
+html,body,#root{height:100%;}
+.app-shell{height:100vh;height:-webkit-fill-available;}
 </style>
 <script>
 const rawAppId=typeof __app_id!=='undefined'?__app_id:'default-app-id';
@@ -1401,15 +1404,14 @@ function App() {
     if (routeIds.includes(id)) setRouteIds(p => p.filter(x => x !== id));else setRouteIds(p => [...p, id]);
   };
   return /*#__PURE__*/React.createElement("div", {
+    className: "app-shell",
     style: {
       maxWidth: 480,
       margin: "0 auto",
       background: "#F9F7F2",
-      height: "100svh",
       display: "flex",
       flexDirection: "column",
-      overflow: "hidden",
-      position: "relative"
+      overflow: "hidden"
     }
   }, /*#__PURE__*/React.createElement(Toast, {
     toasts: toasts

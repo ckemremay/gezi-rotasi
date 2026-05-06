@@ -48,7 +48,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--pri);}
 .header{background:linear-gradient(135deg,#1C3A2A 0%,#2D5A42 100%);color:#fff;
   padding:calc(40px + env(safe-area-inset-top)) 24px 22px;
   border-bottom-left-radius:28px;border-bottom-right-radius:28px;
-  box-shadow:0 10px 30px rgba(28,58,42,.15);}
+  box-shadow:0 10px 30px rgba(28,58,42,.15);
+  position:sticky;top:0;z-index:200;}
 .tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);
   overflow-x:auto;padding:0 8px;position:sticky;top:0;z-index:100;white-space:nowrap;}
 .ctab{padding:14px 18px;border-bottom:3px solid transparent;font-size:13px;
@@ -64,10 +65,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--pri);}
   border:1.5px solid var(--border);box-shadow:var(--sh);}
 .nav-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);
   backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;
-  padding:10px 0 calc(10px + env(safe-area-inset-bottom));z-index:1000;}
+  padding:8px 8px calc(8px + env(safe-area-inset-bottom));z-index:1000;gap:4px;}
 .nav-item{flex:1;text-align:center;color:var(--muted);font-size:9px;
-  font-weight:700;transition:color .2s;letter-spacing:.3px;}
-.nav-item.on{color:var(--pri);}
+  font-weight:700;transition:all .2s;letter-spacing:.3px;
+  padding:8px 4px;border-radius:16px;}
+.nav-item.on{color:var(--pri);background:rgba(28,58,42,.08);}
 .chip{padding:8px 14px;border-radius:50px;border:1.5px solid var(--border);
   font-size:12px;font-weight:600;background:#fff;cursor:pointer;
   white-space:nowrap;font-family:'Figtree',sans-serif;transition:all .2s;}
@@ -2284,12 +2286,22 @@ function App() {
     key: t.k,
     className: `nav-item tap${tab === t.k ? " on" : ""}`,
     onClick: () => setTab(t.k)
-  }, /*#__PURE__*/React.createElement("div", {
+  },
+  /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 22,
-      marginBottom: 2
+      width: 28, height: 3,
+      background: tab === t.k ? "var(--pri)" : "transparent",
+      borderRadius: 2,
+      margin: "0 auto 5px",
+      transition: "background .2s"
     }
-  }, t.ic), /*#__PURE__*/React.createElement("div", null, t.lb)))), viewPhoto && /*#__PURE__*/React.createElement("div", {
+  }),
+  /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 22, marginBottom: 2 }
+  }, t.ic),
+  /*#__PURE__*/React.createElement("div", {
+    style: { fontWeight: tab === t.k ? 800 : 600 }
+  }, t.lb)))), viewPhoto && /*#__PURE__*/React.createElement("div", {
     className: "photo-full",
     onClick: () => setViewPhoto(null)
   }, /*#__PURE__*/React.createElement("img", {

@@ -710,6 +710,148 @@ function PieChart(_ref2) {
 }
 
 // ── ANA UYGULAMA ──────────────────────────────────────────────────────────────
+
+// ── Şehir adına göre emoji ataması
+function getCityEmoji(name) {
+  if (!name) return "📍";
+  const n = name.toLowerCase().trim();
+  const map = {
+    // Almanya
+    "kiel": "⚓", "lübeck": "🏰", "lubeck": "🏰",
+    "berlin": "🐻", "münchen": "🍺", "munich": "🍺",
+    "frankfurt": "🏦", "köln": "⛪", "cologne": "⛪",
+    "düsseldorf": "🎨", "dusseldorf": "🎨",
+    "stuttgart": "🏎️", "hannover": "🌿",
+    "nürnberg": "🏰", "nuremberg": "🏰",
+    "dresden": "🏯", "leipzig": "🎵",
+    "freiburg": "🌲", "heidelberg": "🏰",
+    "rostock": "⚓", "stralsund": "⚓",
+    "schwerin": "🏯", "potsdam": "🌳",
+    "magdeburg": "🏰", "erfurt": "🌺",
+    "münster": "🚲", "munster": "🚲",
+    "augsburg": "⛲", "regensburg": "🌉",
+    "wiesbaden": "🍷", "mainz": "🍷",
+    "trier": "🏛️", "aachen": "👑",
+    "bochum": "⚽", "dortmund": "⚽",
+    "essen": "🏭", "duisburg": "🚢",
+    "bielefeld": "🏙️", "bonn": "🎼",
+    "mannheim": "🏙️", "karlsruhe": "🌳",
+    "koblenz": "🌊", "braunschweig": "🦁",
+    "kassel": "🎭", "halle": "🎵",
+    "osnabrück": "🕊️", "oldenburg": "🐎",
+    "lüneburg": "🧂", "luneburg": "🧂",
+    "flensburg": "⚓", "schleswig": "⚓",
+    "wismar": "⚓", "greifswald": "🎓",
+    // Danimarka
+    "kopenhagen": "🧜", "kopenhag": "🧜",
+    "copenhagen": "🧜", "aarhus": "🌊",
+    "aalborg": "🚢", "esbjerg": "⚓",
+    "randers": "🦌", "kolding": "🏰",
+    "vejle": "🌉", "horsens": "🎵",
+    "roskilde": "⛪", "helsingør": "🏰",
+    "elsinore": "🏰", "viborg": "⛪",
+    "silkeborg": "🏞️", "fredericia": "⚔️",
+    "sønderborg": "🏰", "svendborg": "⛵",
+    "næstved": "🌿", "hillerød": "🏯",
+    // Avusturya
+    "wien": "🎼", "vienna": "🎼",
+    "salzburg": "🎵", "graz": "⚙️",
+    "linz": "🎨", "innsbruck": "🏔️",
+    // İsviçre
+    "zürich": "🏦", "zurich": "🏦",
+    "basel": "🎨", "bern": "🐻",
+    "geneva": "🕊️", "cenevre": "🕊️",
+    "lausanne": "🎓",
+    // Hollanda
+    "amsterdam": "🌷", "rotterdam": "🚢",
+    "den haag": "⚖️", "utrecht": "⛪",
+    "eindhoven": "💡", "groningen": "🎓",
+    // Belçika
+    "brüksel": "🍟", "brussels": "🍟",
+    "brugge": "🏰", "bruges": "🏰",
+    "ghent": "🐲", "gent": "🐲",
+    "antwerp": "💎", "antwerpen": "💎",
+    "liège": "🎻", "liege": "🎻",
+    // Fransa
+    "paris": "🗼", "lyon": "🍽️",
+    "marseille": "⛵", "nice": "🌊",
+    "bordeaux": "🍷", "strasbourg": "🥨",
+    "toulouse": "✈️", "nantes": "🏰",
+    "lille": "🧇", "rennes": "🎭",
+    // İngiltere
+    "london": "🎡", "londra": "🎡",
+    "edinburgh": "🏰", "manchester": "⚽",
+    "liverpool": "🎵", "birmingham": "⚙️",
+    "bristol": "🚢", "oxford": "🎓",
+    "cambridge": "🎓", "york": "⚔️",
+    "bath": "🛁", "brighton": "🎡",
+    // İspanya
+    "madrid": "⚽", "barcelona": "🎨",
+    "seville": "🌸", "sevilla": "🌸",
+    "granada": "🏯", "valencia": "🍊",
+    "bilbao": "🦑", "toledo": "⚔️",
+    "malaga": "☀️", "cordoba": "🌸",
+    // İtalya
+    "roma": "🏛️", "rome": "🏛️",
+    "floransa": "🌺", "florence": "🌺",
+    "venedik": "🚣", "venice": "🚣",
+    "milan": "👗", "milano": "👗",
+    "napoli": "🍕", "naples": "🍕",
+    "turin": "🏎️", "torino": "🏎️",
+    "bologna": "🍝", "pisa": "🗼",
+    "verona": "💌", "siena": "🐎",
+    // Portekiz
+    "lizbon": "🚋", "lisbon": "🚋",
+    "porto": "🍷", "faro": "☀️",
+    // İsveç
+    "stockholm": "👑", "göteborg": "⚓",
+    "gothenburg": "⚓", "malmö": "🌉",
+    "malmo": "🌉", "uppsala": "🎓",
+    // Norveç
+    "oslo": "⛷️", "bergen": "🌧️",
+    "trondheim": "⚓", "tromsø": "🌌",
+    "tromso": "🌌",
+    // Finlandiya
+    "helsinki": "🦌", "tampere": "🏭",
+    "turku": "⚓", "oulu": "❄️",
+    // Polonya
+    "varşova": "🦅", "warsaw": "🦅",
+    "krakow": "🐉", "kraków": "🐉",
+    "gdansk": "⚓", "gdańsk": "⚓",
+    "wroclaw": "🦊", "wrocław": "🦊",
+    // Çek Cumhuriyeti
+    "prag": "🏰", "prague": "🏰",
+    "brno": "🏰", "ostrava": "🏭",
+    // Macaristan
+    "budapeşte": "🌉", "budapest": "🌉",
+    // Romanya
+    "bükreş": "🏛️", "bucharest": "🏛️",
+    "brasov": "⛷️", "cluj": "🎓",
+    // Yunanistan
+    "atina": "🏛️", "athens": "🏛️",
+    "selanik": "🌊", "thessaloniki": "🌊",
+    "rodos": "☀️", "rhodes": "☀️",
+    "santorini": "🌅",
+    // Türkiye
+    "istanbul": "🕌", "ankara": "🏛️",
+    "izmir": "🌊", "antalya": "☀️",
+    "bursa": "🌿", "konya": "🕌",
+    "trabzon": "⛵", "erzurum": "🏔️",
+    // Genel coğrafya ipuçları
+  };
+  // Direkt eşleşme
+  if (map[n]) return map[n];
+  // Kısmi eşleşme
+  for (const [key, emoji] of Object.entries(map)) {
+    if (n.includes(key) || key.includes(n)) return emoji;
+  }
+  // Varsayılan: güzel bir seyahat emojisi
+  const defaults = ["🏙️","🌍","🗺️","✈️","🌐","🏘️","🗺️"];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return defaults[Math.abs(hash) % defaults.length];
+}
+
 function App() {
   const initExp = {
     desc: "",
@@ -1081,7 +1223,8 @@ function App() {
         id,
         lat: 51,
         lon: 10,
-        currency: "EUR"
+        currency: "EUR",
+        emoji: getCityEmoji(newCity.name)
       });
       setCity(id);
       setShowAddCity(false);
@@ -1148,7 +1291,7 @@ function App() {
       wr(`cities/${cityId}`, {
         id: cityId,
         name: newCity.name,
-        emoji: "✨",
+        emoji: getCityEmoji(newCity.name),
         lat: ((_res$places$ = res.places[0]) === null || _res$places$ === void 0 ? void 0 : _res$places$.lat) || 51,
         lon: ((_res$places$2 = res.places[0]) === null || _res$places$2 === void 0 ? void 0 : _res$places$2.lon) || 10,
         currency: res.currency || "EUR"
@@ -2619,7 +2762,8 @@ function App() {
         id,
         lat: 51,
         lon: 10,
-        currency: "EUR"
+        currency: "EUR",
+        emoji: getCityEmoji(newCity.name)
       });
       setCity(id);
       setShowAddCity(false);

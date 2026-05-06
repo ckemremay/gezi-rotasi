@@ -8,6 +8,13 @@
 <meta name="apple-mobile-web-app-title" content="Gezi Rotası">
 <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/512/travel-ready.png">
 <title>Bremen & Hamburg · Gezi Rotası</title>
+<!-- DNS prefetch & preconnect for faster CDN loading -->
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://ortak-gezi-default-rtdb.europe-west1.firebasedatabase.app">
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700&family=Figtree:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -888,12 +895,24 @@ function App() {
     return () => r.off();
   }, []);
 
-  // ── Firebase veri
+  // ── Firebase veri (localStorage cache for instant load)
   useEffect(() => {
+    // Immediately load from cache so no spinner after first visit
+    try {
+      const cached = localStorage.getItem("gezi_cache");
+      if (cached) {
+        const d = JSON.parse(cached);
+        if (d && typeof d === "object") setFData(d);
+      }
+    } catch {}
+    // Then sync from Firebase
     const r = window._db.ref(window._dp);
     r.on("value", s => {
       const d = s.val() || {};
       setFData(d);
+      try {
+        localStorage.setItem("gezi_cache", JSON.stringify(d));
+      } catch {}
     });
     return () => r.off();
   }, []);
@@ -1216,6 +1235,8 @@ function App() {
       };
     });
   }, [convAmt, convBase, rates]);
+
+  // Show minimal skeleton if no data yet (cache miss on first ever load)
   if (!fData) return /*#__PURE__*/React.createElement("div", {
     style: {
       height: "100vh",
@@ -1223,18 +1244,25 @@ function App() {
       alignItems: "center",
       justifyContent: "center",
       flexDirection: "column",
-      gap: 12
+      gap: 16,
+      background: "#F9F7F2"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       border: "3px solid #E8E2D9",
       borderTopColor: "#1C3A2A",
       borderRadius: "50%",
       animation: "spin .8s linear infinite"
     }
-  }), /*#__PURE__*/React.createElement("style", null, `@keyframes spin{to{transform:rotate(360deg)}}`));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: "#7A6F66",
+      fontWeight: 600
+    }
+  }, "Ba\u011Flan\u0131yor\u2026"), /*#__PURE__*/React.createElement("style", null, `@keyframes spin{to{transform:rotate(360deg)}}`));
 
   // ── Türetilmiş veriler
   const customCities = fData.cities || {};

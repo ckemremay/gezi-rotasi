@@ -1,0 +1,2879 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gezi Rotası">
+<link rel="apple-touch-icon" href="https://img.icons8.com/fluency/512/travel-ready.png">
+<title>Bremen & Hamburg · Gezi Rotası</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700&family=Figtree:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{--pri:#1C3A2A;--acc:#B8682A;--bg:#F9F7F2;--card:#fff;
+      --text:#2A211A;--muted:#7A6F66;--border:#E8E2D9;
+      --green:#438A64;--red:#D14D3F;
+      --sh:0 4px 12px rgba(42,33,26,.06);--sh-lg:0 8px 24px rgba(42,33,26,.1);}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{background:var(--bg);font-family:'Figtree',sans-serif;color:var(--text);
+          overscroll-behavior:none;line-height:1.5;-webkit-font-smoothing:antialiased;}
+input,select,textarea{font-family:'Figtree',sans-serif;outline:none;
+  border:1.5px solid var(--border);transition:border-color .2s;
+  background:#fff;border-radius:12px;padding:12px 14px;width:100%;}
+input:focus,select:focus,textarea:focus{border-color:var(--pri);}
+::-webkit-scrollbar{display:none;}
+.tap{cursor:pointer;user-select:none;transition:transform .1s,opacity .15s;}
+.tap:active{transform:scale(.97);opacity:.8;}
+.overlay{position:fixed;inset:0;background:rgba(28,58,42,.45);
+  backdrop-filter:blur(4px);z-index:2000;
+  display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal{background:#fff;border-radius:24px;padding:28px;width:100%;
+  max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:var(--sh-lg);}
+.btn-pri{background:var(--pri);color:#fff;border:none;padding:14px;
+  border-radius:14px;font-weight:700;font-size:15px;width:100%;
+  font-family:'Figtree',sans-serif;cursor:pointer;}
+.btn-out{background:#fff;border:1.5px solid var(--border);padding:12px;
+  border-radius:14px;font-weight:600;font-size:14px;width:100%;
+  color:var(--pri);font-family:'Figtree',sans-serif;cursor:pointer;}
+.lbl{font-size:11px;font-weight:800;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block;}
+.header{background:linear-gradient(135deg,#1C3A2A 0%,#2D5A42 100%);color:#fff;
+  padding:calc(40px + env(safe-area-inset-top)) 24px 22px;
+  border-bottom-left-radius:28px;border-bottom-right-radius:28px;
+  box-shadow:0 10px 30px rgba(28,58,42,.15);}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);
+  overflow-x:auto;padding:0 8px;position:sticky;top:0;z-index:100;white-space:nowrap;}
+.ctab{padding:14px 18px;border-bottom:3px solid transparent;font-size:13px;
+  font-weight:600;color:var(--muted);transition:all .25s;cursor:pointer;
+  display:flex;align-items:center;gap:6px;}
+.ctab.on{border-bottom-color:var(--pri);font-weight:800;color:var(--pri);}
+.place-card{background:#fff;border-radius:20px;padding:18px 18px 14px;
+  margin-bottom:14px;box-shadow:var(--sh);border:1.5px solid var(--border);}
+.place-card.vis{background:#f1f3f1;border-color:#d8e0d8;opacity:.82;}
+.wx-day{flex:1;text-align:center;padding:7px 3px;border-radius:12px;
+  background:rgba(28,58,42,.025);border:1px solid rgba(28,58,42,.04);}
+.map-wrap{width:100%;height:280px;border-radius:22px;overflow:hidden;
+  border:1.5px solid var(--border);box-shadow:var(--sh);}
+.nav-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);
+  backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;
+  padding:10px 0 calc(10px + env(safe-area-inset-bottom));z-index:1000;}
+.nav-item{flex:1;text-align:center;color:var(--muted);font-size:9px;
+  font-weight:700;transition:color .2s;letter-spacing:.3px;}
+.nav-item.on{color:var(--pri);}
+.chip{padding:8px 14px;border-radius:50px;border:1.5px solid var(--border);
+  font-size:12px;font-weight:600;background:#fff;cursor:pointer;
+  white-space:nowrap;font-family:'Figtree',sans-serif;transition:all .2s;}
+.chip.on{background:var(--pri);color:#fff;border-color:var(--pri);}
+/* Toast */
+.toast-wrap{position:fixed;top:calc(env(safe-area-inset-top)+12px);
+  left:50%;transform:translateX(-50%);z-index:9999;
+  display:flex;flex-direction:column;gap:8px;
+  width:calc(100% - 32px);max-width:440px;pointer-events:none;}
+.toast{background:#1C3A2A;color:#fff;padding:12px 16px;border-radius:16px;
+  font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.2);
+  display:flex;align-items:center;gap:10px;
+  animation:tIn .3s cubic-bezier(.34,1.56,.64,1);}
+@keyframes tIn{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}
+/* Offline */
+.off-banner{background:var(--red);color:#fff;text-align:center;
+  padding:8px 16px;font-size:12px;font-weight:800;
+  position:sticky;top:0;z-index:500;display:flex;align-items:center;justify-content:center;gap:8px;}
+/* Photos */
+.photo-grid{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
+.photo-thumb{width:68px;height:68px;border-radius:12px;object-fit:cover;
+  border:2px solid var(--border);cursor:pointer;}
+.photo-add{width:68px;height:68px;border-radius:12px;border:2px dashed var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;cursor:pointer;background:var(--bg);}
+.photo-full{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:3000;
+  display:flex;align-items:center;justify-content:center;padding:20px;}
+/* Poll */
+.poll-card{background:#fff;border-radius:20px;padding:20px;margin-bottom:14px;
+  box-shadow:var(--sh);border:1.5px solid var(--border);}
+.poll-opt{padding:12px 16px;border-radius:12px;border:1.5px solid var(--border);
+  margin-bottom:8px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
+.poll-opt.voted{border-color:var(--pri);background:rgba(28,58,42,.04);}
+.poll-bar{position:absolute;left:0;top:0;bottom:0;background:rgba(28,58,42,.06);
+  transition:width .5s ease;border-radius:10px;}
+/* Currency converter */
+.conv-card{background:linear-gradient(135deg,#1C3A2A,#2D5A42);
+  border-radius:20px;padding:20px;margin-bottom:16px;color:#fff;}
+.conv-row{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 0;border-bottom:1px solid rgba(255,255,255,.1);}
+.conv-row:last-child{border-bottom:none;}
+/* Route */
+.route-badge{width:26px;height:26px;border-radius:50%;background:var(--acc);
+  color:#fff;font-size:11px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.route-info{background:#1C3A2A;color:#fff;padding:12px 16px;border-radius:14px;
+  margin-top:12px;display:flex;align-items:center;justify-content:space-between;}
+/* Stat */
+.chart-wrap{background:#fff;border-radius:20px;padding:20px;
+  border:1.5px solid var(--border);box-shadow:var(--sh);margin-bottom:16px;}
+.stat-row{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 0;border-bottom:1px solid #F5F0E8;}
+.stat-row:last-child{border-bottom:none;}
+.del-btn{width:22px;height:22px;border-radius:50%;background:rgba(209,77,63,.1);
+  color:var(--red);display:flex;align-items:center;justify-content:center;
+  font-size:11px;cursor:pointer;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+</style>
+<script>
+const rawAppId=typeof __app_id!=='undefined'?__app_id:'default-app-id';
+const sanitizedAppId=rawAppId.replace(/[.#$[\]]/g,'_');
+const firebaseConfig={
+  apiKey:"AIzaSyDQ0j0necLuPRbvBY7MdybptI20Lx_TbgE",
+  authDomain:"ortak-gezi.firebaseapp.com",
+  databaseURL:"https://ortak-gezi-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:"ortak-gezi",
+  storageBucket:"ortak-gezi.firebasestorage.app",
+  messagingSenderId:"74072730165",
+  appId:"1:74072730165:web:398a182604e78172585f7c"
+};
+firebase.initializeApp(firebaseConfig);
+window._dp=`artifacts/${sanitizedAppId}/public/data`;
+window._db=firebase.database();
+const apiKey="";
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script>
+function _slicedToArray(r, e) { return _arrayWithHoles(r) || _iterableToArrayLimit(r, e) || _unsupportedIterableToArray(r, e) || _nonIterableRest(); }
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0; } }
+function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
+function _iterableToArrayLimit(r, l) { var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (null != t) { var e, n, i, u, a = [], f = !0, o = !1; try { if (i = (t = t.call(r)).next, 0 === l) { if (Object(t) !== t) return; f = !1; } else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0); } catch (r) { o = !0, n = r; } finally { try { if (!f && null != t.return && (u = t.return(), Object(u) !== u)) return; } finally { if (o) throw n; } } return a; } }
+function _arrayWithHoles(r) { if (Array.isArray(r)) return r; }
+const _React = React,
+  useState = _React.useState,
+  useEffect = _React.useEffect,
+  useRef = _React.useRef,
+  useMemo = _React.useMemo;
+
+// ── STATIC DATA ──────────────────────────────────────────────────────────────
+const DEFAULT_CITIES = [{
+  id: "bremen",
+  name: "Bremen",
+  emoji: "🏰",
+  lat: 53.0793,
+  lon: 8.8017,
+  currency: "EUR"
+}, {
+  id: "hamburg",
+  name: "Hamburg",
+  emoji: "⚓",
+  lat: 53.5507,
+  lon: 9.9930,
+  currency: "EUR"
+}, {
+  id: "odense",
+  name: "Odense",
+  emoji: "🚲",
+  lat: 55.4038,
+  lon: 10.4024,
+  currency: "DKK"
+}];
+const STATIC_PLACES = {
+  bremen: [{
+    id: "b1",
+    name: "🎡 Mühle am Wall",
+    desc: "Bremen'in en ikonik yel değirmeni.",
+    lat: 53.0805,
+    lon: 8.8048,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/wESmemF8PgUnNgJ18"
+  }, {
+    id: "b2",
+    name: "🏛️ Bremen Marktplatz",
+    desc: "UNESCO Dünya Mirası, şehrin kalbi.",
+    lat: 53.0758,
+    lon: 8.8073,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/afdHmMozHGTKSZ3p7"
+  }, {
+    id: "b3",
+    name: "🛡️ Bremen Roland",
+    desc: "1404'ten kalma özgürlük heykeli.",
+    lat: 53.0759,
+    lon: 8.8074,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/vncH3ewTgAFv9Wiw6"
+  }, {
+    id: "b4",
+    name: "⛪ St. Petri Dom",
+    desc: "1000 yıllık gotik katedral.",
+    lat: 53.0757,
+    lon: 8.8088,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/FW5niLuGXo347FLH7"
+  }, {
+    id: "b5",
+    name: "🧱 Böttcherstraße",
+    desc: "Ekspresyonist mimarinin dar sokağı.",
+    lat: 53.0751,
+    lon: 8.8058,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/wvmcAMfasukr9hvf7"
+  }, {
+    id: "b6",
+    name: "🛍️ Manufactum",
+    desc: "Alman kalitesini temsil eden mağaza.",
+    lat: 53.0753,
+    lon: 8.8062,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/NC44j2ZhqxRppLCo9"
+  }, {
+    id: "b7",
+    name: "🏘️ Schnoor",
+    desc: "Bremen'in en eski masalsı mahallesi.",
+    lat: 53.0728,
+    lon: 8.8093,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/ADuPhL4iX3RsD61x8"
+  }, {
+    id: "b8",
+    name: "☕ Harbour Coffee",
+    desc: "En iyi specialty kahve noktası.",
+    lat: 53.0768,
+    lon: 8.8016,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/ZtLJxEPcDA7PLBMR7"
+  }, {
+    id: "b9",
+    name: "🎨 Ostertorviertel",
+    desc: "Alternatif, canlı genç mahalle.",
+    lat: 53.0735,
+    lon: 8.8208,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/UcSBWifh2fzKssqv7"
+  }, {
+    id: "b10",
+    name: "🌅 Schlachte",
+    desc: "Weser kıyısı, gün batımı noktası.",
+    lat: 53.0772,
+    lon: 8.8016,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/NFW9gPZjSJe41QuUA"
+  }, {
+    id: "b11",
+    name: "🍰 Café Knigge",
+    desc: "Klasik Alman pastanesi.",
+    lat: 53.0784,
+    lon: 8.8097,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/m719AKhXDrEQPV3C7"
+  }],
+  hamburg: [{
+    id: "h1",
+    name: "🚂 Hamburg Hbf",
+    desc: "Ana tren istasyonu, başlangıç noktası.",
+    lat: 53.5528,
+    lon: 10.0064,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/nK1QzUFg8GUMA41MA"
+  }, {
+    id: "h2",
+    name: "🚶 Mönckebergstraße",
+    desc: "Ana alışveriş caddesi.",
+    lat: 53.5512,
+    lon: 9.9984,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Mönckebergstraße+Hamburg"
+  }, {
+    id: "h3",
+    name: "⛪ St. Peter's Church",
+    desc: "12. yüzyıldan kalma en eski kilise.",
+    lat: 53.5505,
+    lon: 9.9961,
+    isStatic: true,
+    url: "https://maps.google.com/?q=St.+Peter%27s+Church+Hamburg"
+  }, {
+    id: "h4",
+    name: "☕ Elbgold Coffee",
+    desc: "Hamburg'un ünlü kahve kavurma yeri.",
+    lat: 53.5447,
+    lon: 9.9863,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/DFiB8T4FSHYDbTNH7"
+  }, {
+    id: "h5",
+    name: "⛲ Rathausmarkt",
+    desc: "Belediye meydanı.",
+    lat: 53.5508,
+    lon: 9.9930,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Rathausmarkt+Hamburg"
+  }, {
+    id: "h6",
+    name: "🏛️ Hamburg Rathaus",
+    desc: "647 odalı belediye binası.",
+    lat: 53.5505,
+    lon: 9.9922,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Hamburg+Rathaus"
+  }, {
+    id: "h7",
+    name: "🌊 Binnenalster",
+    desc: "Şehir merkezindeki yapay göl.",
+    lat: 53.5534,
+    lon: 9.9931,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Binnenalster"
+  }, {
+    id: "h8",
+    name: "🌉 Lombardsbrücke",
+    desc: "Alster manzaralı tarihi köprü.",
+    lat: 53.5562,
+    lon: 9.9942,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Lombardsbrücke"
+  }, {
+    id: "h9",
+    name: "🍵 Das Teekontor",
+    desc: "Tarihi çay dükkanı.",
+    lat: 53.5485,
+    lon: 9.9948,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Das+Teekontor+Hamburg"
+  }, {
+    id: "h10",
+    name: "🚢 Chilehaus",
+    desc: "Gemi formlu ekspresyonist bina.",
+    lat: 53.5484,
+    lon: 10.0016,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Chilehaus"
+  }, {
+    id: "h11",
+    name: "🏘️ Deichstraße",
+    desc: "Yangından kurtulan tarihi sokak.",
+    lat: 53.5453,
+    lon: 9.9877,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Deichstraße+Hamburg"
+  }, {
+    id: "h12",
+    name: "☕ Nord Coast Coffee",
+    desc: "Kanal manzaralı modern kafe.",
+    lat: 53.5458,
+    lon: 9.9885,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/KmieACguqRgiPpXq7"
+  }, {
+    id: "h13",
+    name: "🧱 Speicherstadt",
+    desc: "UNESCO mirası tarihi depo kompleksi.",
+    lat: 53.5444,
+    lon: 9.9918,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Speicherstadt"
+  }, {
+    id: "h14",
+    name: "📸 Poggenmühlen Bridge",
+    desc: "En ikonik fotoğraf noktası.",
+    lat: 53.5458,
+    lon: 9.9989,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Poggenmühlen+Bridge"
+  }, {
+    id: "h15",
+    name: "⛪ St. Michaelis",
+    desc: "Hamburg'un barok simgesi.",
+    lat: 53.5484,
+    lon: 9.9789,
+    isStatic: true,
+    url: "https://maps.google.com/?q=St.+Michaelis+Church+Hamburg"
+  }, {
+    id: "h16",
+    name: "⚓ Landungsbrücken",
+    desc: "Elbe kıyısı yüzer iskeleler.",
+    lat: 53.5458,
+    lon: 9.9696,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Landungsbrücken"
+  }, {
+    id: "h17",
+    name: "🎨 Karolinenviertel",
+    desc: "Alternatif butik mahalle.",
+    lat: 53.5593,
+    lon: 9.9744,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Karolinenviertel+Hamburg"
+  }, {
+    id: "h18",
+    name: "☕ Public Coffee Roasters",
+    desc: "Liman bölgesi modern kafe.",
+    lat: 53.5515,
+    lon: 9.9575,
+    isStatic: true,
+    url: "https://maps.app.goo.gl/KmieACguqRgiPpXq7"
+  }],
+  odense: [{
+    id: "o1",
+    name: "🏠 H.C. Andersen House",
+    desc: "Andersen'in doğduğu ev ve müze.",
+    lat: 55.3995,
+    lon: 10.3922,
+    isStatic: true,
+    url: "https://maps.google.com/?q=HC+Andersen+Museum+Odense"
+  }, {
+    id: "o2",
+    name: "⛪ Odense Cathedral",
+    desc: "Danimarka'nın en güzel gotiği.",
+    lat: 55.3956,
+    lon: 10.3888,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Odense+Cathedral"
+  }, {
+    id: "o3",
+    name: "🏘️ The Funen Village",
+    desc: "Açık hava köy müzesi.",
+    lat: 55.3678,
+    lon: 10.3855,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Den+Fynske+Landsby"
+  }, {
+    id: "o4",
+    name: "🚲 Brandts Klædefabrik",
+    desc: "Eski fabrikadan sanat merkezi.",
+    lat: 55.3958,
+    lon: 10.3811,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Brandts+Odense"
+  }, {
+    id: "o5",
+    name: "🌳 Munke Mose Park",
+    desc: "Şehrin en sevilen parkı.",
+    lat: 55.3922,
+    lon: 10.3855,
+    isStatic: true,
+    url: "https://maps.google.com/?q=Munke+Mose+Odense"
+  }]
+};
+const EXP_CATS = [{
+  id: "food",
+  name: "Yemek",
+  emoji: "🍽️",
+  color: "#FF6B6B"
+}, {
+  id: "transport",
+  name: "Ulaşım",
+  emoji: "🚗",
+  color: "#4ECDC4"
+}, {
+  id: "fuel",
+  name: "Yakıt",
+  emoji: "⛽",
+  color: "#45B7D1"
+}, {
+  id: "hotel",
+  name: "Konaklama",
+  emoji: "🏨",
+  color: "#96CEB4"
+}, {
+  id: "fun",
+  name: "Eğlence",
+  emoji: "🎭",
+  color: "#FECA57"
+}, {
+  id: "shop",
+  name: "Alışveriş",
+  emoji: "🛍️",
+  color: "#FF9FF3"
+}, {
+  id: "other",
+  name: "Diğer",
+  emoji: "📦",
+  color: "#54A0FF"
+}];
+const WMO = {
+  0: "☀️",
+  1: "🌤️",
+  2: "⛅",
+  3: "☁️",
+  45: "🌫️",
+  51: "🌦️",
+  53: "🌦️",
+  55: "🌧️",
+  61: "🌧️",
+  63: "🌧️",
+  65: "🌧️",
+  71: "🌨️",
+  80: "⛈️",
+  95: "⛈️"
+};
+const DAYS = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+const SYM = {
+  TRY: "₺",
+  EUR: "€",
+  USD: "$",
+  DKK: "kr"
+};
+const MEMBERS = ["Emre", "Tuğçe", "Erdem", "Mihrap"];
+
+// ── YARDIMCI FONKSİYONLAR ────────────────────────────────────────────────────
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000,
+    φ1 = lat1 * Math.PI / 180,
+    φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180,
+    Δλ = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function walkMin(meters) {
+  return Math.round(meters / 80);
+}
+function fmtDist(m) {
+  return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`;
+}
+async function compressImg(file) {
+  return new Promise(res => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 380,
+          canvas = document.createElement('canvas');
+        let w = img.width,
+          h = img.height;
+        if (w > h) {
+          if (w > MAX) {
+            h = h * MAX / w;
+            w = MAX;
+          }
+        } else {
+          if (h > MAX) {
+            w = w * MAX / h;
+            h = MAX;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        res(canvas.toDataURL('image/jpeg', .48));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function settle(exps, n, cur) {
+  const bal = Array(n).fill(0);
+  exps.filter(e => e.currency === cur).forEach(e => {
+    const amt = parseFloat(e.amount) || 0,
+      sp = (e.splitAmong || []).length;
+    if (!sp) return;
+    bal[e.paidBy] += amt;
+    (e.splitAmong || []).forEach(i => {
+      bal[i] -= amt / sp;
+    });
+  });
+  const txs = [],
+    b = [...bal];
+  for (let i = 0; i < 50; i++) {
+    const mx = Math.max(...b),
+      mn = Math.min(...b),
+      ci = b.indexOf(mx),
+      di = b.indexOf(mn);
+    if (mx < 0.01 || -mn < 0.01) break;
+    const a = Math.min(mx, -mn);
+    txs.push({
+      from: di,
+      to: ci,
+      amt: a
+    });
+    b[ci] -= a;
+    b[di] += a;
+  }
+  return {
+    bal,
+    txs
+  };
+}
+
+// ── TOAST ────────────────────────────────────────────────────────────────────
+function Toast(_ref) {
+  let toasts = _ref.toasts;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "toast-wrap"
+  }, toasts.map(t => /*#__PURE__*/React.createElement("div", {
+    key: t.id,
+    className: "toast"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20,
+      flexShrink: 0
+    }
+  }, t.icon), /*#__PURE__*/React.createElement("span", null, t.msg))));
+}
+
+// ── PIE CHART ────────────────────────────────────────────────────────────────
+function PieChart(_ref2) {
+  let exps = _ref2.exps,
+    currency = _ref2.currency;
+  const ref = useRef(null),
+    chart = useRef(null);
+  useEffect(() => {
+    var _chart$current;
+    if (!ref.current) return;
+    (_chart$current = chart.current) === null || _chart$current === void 0 || _chart$current.destroy();
+    const f = exps.filter(e => e.currency === currency && !e.isSettlement);
+    const catMap = {};
+    EXP_CATS.forEach(c => {
+      catMap[c.id] = 0;
+    });
+    f.forEach(e => {
+      catMap[e.category] = (catMap[e.category] || 0) + (parseFloat(e.amount) || 0);
+    });
+    const active = EXP_CATS.filter(c => catMap[c.id] > 0.01);
+    if (!active.length) return;
+    chart.current = new Chart(ref.current, {
+      type: "doughnut",
+      data: {
+        labels: active.map(c => `${c.emoji} ${c.name}`),
+        datasets: [{
+          data: active.map(c => catMap[c.id]),
+          backgroundColor: active.map(c => c.color),
+          borderWidth: 2,
+          borderColor: "#fff"
+        }]
+      },
+      options: {
+        responsive: true,
+        cutout: "60%",
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              font: {
+                family: "Figtree",
+                size: 11
+              },
+              padding: 10
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.label}: ${SYM[currency] || ""}${ctx.raw.toFixed(2)}`
+            }
+          }
+        }
+      }
+    });
+    return () => {
+      var _chart$current2;
+      return (_chart$current2 = chart.current) === null || _chart$current2 === void 0 ? void 0 : _chart$current2.destroy();
+    };
+  }, [exps, currency]);
+  const total = exps.filter(e => e.currency === currency && !e.isSettlement).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#7A6F66",
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: .5
+    }
+  }, "Toplam (", currency, ")"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 26,
+      fontWeight: 800,
+      color: "#1C3A2A"
+    }
+  }, SYM[currency] || "", total.toFixed(2)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#7A6F66"
+    }
+  }, "Ki\u015Fi ba\u015F\u0131: ", SYM[currency] || "", (total / MEMBERS.length).toFixed(2))), /*#__PURE__*/React.createElement("canvas", {
+    ref: ref,
+    style: {
+      maxHeight: 220
+    }
+  }));
+}
+
+// ── ANA UYGULAMA ──────────────────────────────────────────────────────────────
+function App() {
+  const initExp = {
+    desc: "",
+    amount: "",
+    currency: "EUR",
+    paidBy: 0,
+    splitAmong: [0, 1, 2, 3],
+    category: "food",
+    city: "bremen"
+  };
+  const initPl = {
+    name: "",
+    desc: "",
+    url: "",
+    addedBy: 0
+  };
+  const _useState = useState("rota"),
+    _useState2 = _slicedToArray(_useState, 2),
+    tab = _useState2[0],
+    setTab = _useState2[1];
+  const _useState3 = useState("bremen"),
+    _useState4 = _slicedToArray(_useState3, 2),
+    city = _useState4[0],
+    setCity = _useState4[1];
+  const _useState5 = useState(null),
+    _useState6 = _slicedToArray(_useState5, 2),
+    fData = _useState6[0],
+    setFData = _useState6[1];
+  const _useState7 = useState(false),
+    _useState8 = _slicedToArray(_useState7, 2),
+    syncing = _useState8[0],
+    setSyncing = _useState8[1];
+  const _useState9 = useState(null),
+    _useState0 = _slicedToArray(_useState9, 2),
+    wxData = _useState0[0],
+    setWxData = _useState0[1];
+  const _useState1 = useState({
+      EUR: 1,
+      TRY: 38.5,
+      USD: 1.08,
+      DKK: 7.46
+    }),
+    _useState10 = _slicedToArray(_useState1, 2),
+    rates = _useState10[0],
+    setRates = _useState10[1];
+  const _useState11 = useState(true),
+    _useState12 = _slicedToArray(_useState11, 2),
+    isOnline = _useState12[0],
+    setIsOnline = _useState12[1];
+  const _useState13 = useState([]),
+    _useState14 = _slicedToArray(_useState13, 2),
+    toasts = _useState14[0],
+    setToasts = _useState14[1];
+  const _useState15 = useState(typeof Notification !== "undefined" ? Notification.permission : "denied"),
+    _useState16 = _slicedToArray(_useState15, 2),
+    notifPerm = _useState16[0],
+    setNotifPerm = _useState16[1];
+  // Modals
+  const _useState17 = useState(false),
+    _useState18 = _slicedToArray(_useState17, 2),
+    showAddPl = _useState18[0],
+    setShowAddPl = _useState18[1];
+  const _useState19 = useState(false),
+    _useState20 = _slicedToArray(_useState19, 2),
+    showAddExp = _useState20[0],
+    setShowAddExp = _useState20[1];
+  const _useState21 = useState(false),
+    _useState22 = _slicedToArray(_useState21, 2),
+    showAddCity = _useState22[0],
+    setShowAddCity = _useState22[1];
+  const _useState23 = useState(null),
+    _useState24 = _slicedToArray(_useState23, 2),
+    showDelExp = _useState24[0],
+    setShowDelExp = _useState24[1];
+  const _useState25 = useState(false),
+    _useState26 = _slicedToArray(_useState25, 2),
+    showPollCreate = _useState26[0],
+    setShowPollCreate = _useState26[1];
+  const _useState27 = useState(null),
+    _useState28 = _slicedToArray(_useState27, 2),
+    viewPhoto = _useState28[0],
+    setViewPhoto = _useState28[1];
+  const _useState29 = useState(false),
+    _useState30 = _slicedToArray(_useState29, 2),
+    showConv = _useState30[0],
+    setShowConv = _useState30[1];
+  const _useState31 = useState(false),
+    _useState32 = _slicedToArray(_useState31, 2),
+    aiLoading = _useState32[0],
+    setAiLoading = _useState32[1];
+  // Forms
+  const _useState33 = useState(initPl),
+    _useState34 = _slicedToArray(_useState33, 2),
+    newPl = _useState34[0],
+    setNewPl = _useState34[1];
+  const _useState35 = useState(initExp),
+    _useState36 = _slicedToArray(_useState35, 2),
+    newExp = _useState36[0],
+    setNewExp = _useState36[1];
+  const _useState37 = useState({
+      name: "",
+      emoji: "📍"
+    }),
+    _useState38 = _slicedToArray(_useState37, 2),
+    newCity = _useState38[0],
+    setNewCity = _useState38[1];
+  const _useState39 = useState({
+      question: "",
+      options: ["", ""]
+    }),
+    _useState40 = _slicedToArray(_useState39, 2),
+    newPoll = _useState40[0],
+    setNewPoll = _useState40[1];
+  // New features state
+  const _useState41 = useState(false),
+    _useState42 = _slicedToArray(_useState41, 2),
+    routeMode = _useState42[0],
+    setRouteMode = _useState42[1];
+  const _useState43 = useState([]),
+    _useState44 = _slicedToArray(_useState43, 2),
+    routeIds = _useState44[0],
+    setRouteIds = _useState44[1];
+  const _useState45 = useState(null),
+    _useState46 = _slicedToArray(_useState45, 2),
+    userLoc = _useState46[0],
+    setUserLoc = _useState46[1];
+  const _useState47 = useState(false),
+    _useState48 = _slicedToArray(_useState47, 2),
+    nearbyMode = _useState48[0],
+    setNearbyMode = _useState48[1];
+  const _useState49 = useState("EUR"),
+    _useState50 = _slicedToArray(_useState49, 2),
+    chartCur = _useState50[0],
+    setChartCur = _useState50[1];
+  const _useState51 = useState("100"),
+    _useState52 = _slicedToArray(_useState51, 2),
+    convAmt = _useState52[0],
+    setConvAmt = _useState52[1];
+  const _useState53 = useState("EUR"),
+    _useState54 = _slicedToArray(_useState53, 2),
+    convBase = _useState54[0],
+    setConvBase = _useState54[1];
+  // Refs
+  const mapRef = useRef(null);
+  const polyRef = useRef(null);
+  const userMarkerRef = useRef(null);
+  const mapCityRef = useRef(null);
+  const firstLoad = useRef(true);
+  const seenIds = useRef(new Set());
+  const fileInputRef = useRef({});
+
+  // ── Toast helper
+  const toast = function (msg) {
+    let icon = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "📢";
+    const id = Date.now() + Math.random();
+    setToasts(p => [...p, {
+      id,
+      msg,
+      icon
+    }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4500);
+  };
+
+  // ── Bildirim izni
+  const askNotif = async () => {
+    if (typeof Notification === "undefined") return;
+    const p = await Notification.requestPermission();
+    setNotifPerm(p);
+    if (p === "granted") toast("Bildirimler açıldı!", "🔔");
+  };
+
+  // ── Firebase bağlantı durumu
+  useEffect(() => {
+    const r = window._db.ref(".info/connected");
+    r.on("value", s => setIsOnline(s.val() === true));
+    return () => r.off();
+  }, []);
+
+  // ── Firebase veri
+  useEffect(() => {
+    const r = window._db.ref(window._dp);
+    r.on("value", s => {
+      const d = s.val() || {};
+      setFData(d);
+    });
+    return () => r.off();
+  }, []);
+
+  // ── Bildirim tespiti
+  useEffect(() => {
+    if (!fData) return;
+    if (firstLoad.current) {
+      Object.keys(fData.expenses || {}).forEach(id => seenIds.current.add("e" + id));
+      Object.keys(fData.customPlaces || {}).forEach(id => seenIds.current.add("p" + id));
+      Object.keys(fData.polls || {}).forEach(id => seenIds.current.add("po" + id));
+      firstLoad.current = false;
+      return;
+    }
+    Object.values(fData.expenses || {}).forEach(e => {
+      if (seenIds.current.has("e" + e.id)) return;
+      seenIds.current.add("e" + e.id);
+      const msg = `${MEMBERS[e.paidBy]} masraf ekledi: ${e.desc} (${e.amount}${SYM[e.currency] || ""})`;
+      toast(msg, "💸");
+      if (notifPerm === "granted" && document.hidden) try {
+        new Notification("Gezi Rotası", {
+          body: msg
+        });
+      } catch {}
+    });
+    Object.values(fData.customPlaces || {}).forEach(p => {
+      if (seenIds.current.has("p" + p.id)) return;
+      seenIds.current.add("p" + p.id);
+      toast(`${MEMBERS[p.addedBy] || "Biri"} mekan önerdi: ${p.name}`, "📍");
+    });
+    Object.values(fData.polls || {}).forEach(p => {
+      if (seenIds.current.has("po" + p.id)) return;
+      seenIds.current.add("po" + p.id);
+      toast(`${MEMBERS[p.createdBy] || "Biri"} anket açtı: ${p.question}`, "🗳️");
+    });
+  }, [fData]);
+
+  // ── Hava durumu + döviz
+  useEffect(() => {
+    if (!fData) return;
+    const allC = [...DEFAULT_CITIES, ...Object.values(fData.cities || {})];
+    const c = allC.find(x => x.id === city);
+    if (!c || !c.lat) return;
+    setWxData(null);
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`).then(r => r.json()).then(d => setWxData(d)).catch(() => {});
+    fetch(`https://open.er-api.com/v6/latest/EUR`).then(r => r.json()).then(d => {
+      if (d.rates) setRates({
+        EUR: 1,
+        TRY: d.rates.TRY || 38.5,
+        USD: d.rates.USD || 1.08,
+        DKK: d.rates.DKK || 7.46
+      });
+    }).catch(() => {});
+  }, [city, fData === null || fData === void 0 ? void 0 : fData.cities]);
+
+  // ── Harita (yalnızca şehir / tab / route değişince rebuild)
+  useEffect(() => {
+    if (tab !== "rota" || !fData) return;
+    const timer = setTimeout(() => {
+      const allC = [...DEFAULT_CITIES, ...Object.values(fData.cities || {})];
+      const c = allC.find(x => x.id === city);
+      if (!c) return;
+      const el = document.getElementById("leafmap");
+      if (!el) return;
+      // Sadece şehir değişince haritayı yeniden oluştur
+      if (mapCityRef.current !== city) {
+        if (mapRef.current) {
+          mapRef.current.remove();
+          mapRef.current = null;
+          polyRef.current = null;
+          userMarkerRef.current = null;
+        }
+        const m = L.map(el).setView([c.lat, c.lon], 14);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OSM"
+        }).addTo(m);
+        const places = [...(STATIC_PLACES[city] || []), ...Object.values(fData.customPlaces || {}).filter(p => p.city === city)];
+        places.forEach(p => {
+          if (!p.lat || !p.lon) return;
+          L.circleMarker([p.lat, p.lon], {
+            radius: 8,
+            fillColor: "#B8682A",
+            color: "#fff",
+            weight: 3,
+            fillOpacity: .9
+          }).addTo(m).bindPopup(`<b>${p.name}</b><br><small>${p.desc || ""}</small>`);
+        });
+        mapRef.current = m;
+        mapCityRef.current = city;
+      }
+      // Rota çizgisini güncelle (harita değişmeden)
+      if (polyRef.current) {
+        var _mapRef$current;
+        (_mapRef$current = mapRef.current) === null || _mapRef$current === void 0 || _mapRef$current.removeLayer(polyRef.current);
+        polyRef.current = null;
+      }
+      if (routeIds.length >= 2 && mapRef.current) {
+        const allP = [...(STATIC_PLACES[city] || []), ...Object.values(fData.customPlaces || {}).filter(p => p.city === city)];
+        const latlngs = routeIds.map(id => allP.find(p => p.id === id)).filter(p => p && p.lat).map(p => [p.lat, p.lon]);
+        if (latlngs.length >= 2) {
+          polyRef.current = L.polyline(latlngs, {
+            color: "#B8682A",
+            weight: 4,
+            dashArray: "10,6",
+            opacity: .85
+          }).addTo(mapRef.current);
+          mapRef.current.fitBounds(L.latLngBounds(latlngs), {
+            padding: [30, 30]
+          });
+        }
+      }
+      // Kullanıcı konumu
+      if (userMarkerRef.current) {
+        var _mapRef$current2;
+        (_mapRef$current2 = mapRef.current) === null || _mapRef$current2 === void 0 || _mapRef$current2.removeLayer(userMarkerRef.current);
+        userMarkerRef.current = null;
+      }
+      if (userLoc && mapRef.current) {
+        userMarkerRef.current = L.circleMarker([userLoc.lat, userLoc.lon], {
+          radius: 10,
+          fillColor: "#2196F3",
+          color: "#fff",
+          weight: 3,
+          fillOpacity: .9
+        }).addTo(mapRef.current).bindPopup("📍 Konumun");
+      }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [city, tab, fData, routeIds, userLoc]);
+  useEffect(() => () => {
+    var _mapRef$current3;
+    (_mapRef$current3 = mapRef.current) === null || _mapRef$current3 === void 0 || _mapRef$current3.remove();
+  }, []);
+
+  // ── Firebase yazma
+  const wr = (path, val) => {
+    setSyncing(true);
+    window._db.ref(window._dp + "/" + path).set(val);
+    setTimeout(() => setSyncing(false), 800);
+  };
+
+  // ── Konum al
+  const getLocation = () => {
+    if (!navigator.geolocation) {
+      toast("Cihazın konum özelliği desteklenmiyor.", "❌");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(pos => {
+      setUserLoc({
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude
+      });
+      setNearbyMode(true);
+      toast("Konumun bulundu! Yakındaki mekanlar listeleniyor.", "📍");
+    }, () => toast("Konum izni reddedildi.", "❌"));
+  };
+
+  // ── Fotoğraf yükle
+  const handlePhoto = async (placeId, file) => {
+    if (!file) return;
+    toast("Fotoğraf yükleniyor…", "⏳");
+    const data = await compressImg(file);
+    const id = Date.now().toString();
+    wr(`placePhotos/${placeId}/${id}`, {
+      data,
+      id,
+      uploadedBy: 0,
+      ts: id
+    });
+    toast("Fotoğraf yüklendi!", "📸");
+  };
+
+  // ── Anket oy kullan
+  const votePoll = (pollId, optIdx, memberIdx) => {
+    wr(`polls/${pollId}/votes/${memberIdx}`, optIdx);
+  };
+
+  // ── AI şehir ekle
+  const doAddCity = async () => {
+    if (!newCity.name) return;
+    if (!apiKey) {
+      const id = "city_" + Date.now();
+      wr(`cities/${id}`, {
+        ...newCity,
+        id,
+        lat: 51,
+        lon: 10,
+        currency: "EUR"
+      });
+      setCity(id);
+      setShowAddCity(false);
+      setNewCity({
+        name: "",
+        emoji: "📍"
+      });
+      return;
+    }
+    setAiLoading(true);
+    try {
+      var _res$places$, _res$places$2;
+      const ep = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          places: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                name: {
+                  type: "STRING"
+                },
+                desc: {
+                  type: "STRING"
+                },
+                lat: {
+                  type: "NUMBER"
+                },
+                lon: {
+                  type: "NUMBER"
+                }
+              }
+            }
+          },
+          currency: {
+            type: "STRING"
+          }
+        },
+        required: ["places", "currency"]
+      };
+      const body = {
+        contents: [{
+          parts: [{
+            text: `${newCity.name} şehri için 5 turistik mekan.`
+          }]
+        }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: schema
+        }
+      };
+      const r = await fetch(ep, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+      const d = await r.json();
+      const res = JSON.parse(d.candidates[0].content.parts[0].text);
+      const cityId = "city_" + Date.now();
+      wr(`cities/${cityId}`, {
+        id: cityId,
+        name: newCity.name,
+        emoji: "✨",
+        lat: ((_res$places$ = res.places[0]) === null || _res$places$ === void 0 ? void 0 : _res$places$.lat) || 51,
+        lon: ((_res$places$2 = res.places[0]) === null || _res$places$2 === void 0 ? void 0 : _res$places$2.lon) || 10,
+        currency: res.currency || "EUR"
+      });
+      res.places.forEach((p, i) => {
+        const pid = "c" + Date.now() + i;
+        wr(`customPlaces/${pid}`, {
+          ...p,
+          id: pid,
+          city: cityId,
+          sortOrder: i,
+          addedBy: 0,
+          url: `https://maps.google.com/?q=${encodeURIComponent(p.name + " " + newCity.name)}`
+        });
+      });
+      setCity(cityId);
+      setShowAddCity(false);
+      setNewCity({
+        name: "",
+        emoji: "📍"
+      });
+    } catch {
+      alert("AI yanıt veremiyor.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // ── useMemo hooks (Rules of Hooks: before any conditional return)
+  const nearbyPlaces = useMemo(() => {
+    if (!fData || !userLoc || !nearbyMode) return null;
+    const cp = [...(STATIC_PLACES[city] || []), ...Object.values(fData.customPlaces || {}).filter(p => p.city === city).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))];
+    return cp.map(p => ({
+      ...p,
+      dist: haversine(userLoc.lat, userLoc.lon, p.lat || 0, p.lon || 0)
+    })).filter(p => p.dist < 600).sort((a, b) => a.dist - b.dist);
+  }, [userLoc, nearbyMode, city, fData]);
+  const routeStats = useMemo(() => {
+    if (!fData || routeIds.length < 2) return null;
+    const cp = Object.values(fData.customPlaces || {}).filter(p => p.city === city).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const allP = [...(STATIC_PLACES[city] || []), ...cp];
+    let total = 0;
+    for (let i = 0; i < routeIds.length - 1; i++) {
+      const a = allP.find(p => p.id === routeIds[i]);
+      const b = allP.find(p => p.id === routeIds[i + 1]);
+      if (a && b && a.lat && b.lat) total += haversine(a.lat, a.lon, b.lat, b.lon);
+    }
+    return {
+      dist: total,
+      min: walkMin(total),
+      stops: routeIds.length
+    };
+  }, [routeIds, city, fData]);
+  const convResult = useMemo(() => {
+    const amt = parseFloat(convAmt) || 0;
+    const baseRate = rates[convBase] || 1;
+    const inEUR = amt / baseRate;
+    return Object.entries(rates).map(_ref3 => {
+      let _ref4 = _slicedToArray(_ref3, 2),
+        cur = _ref4[0],
+        r = _ref4[1];
+      return {
+        cur,
+        val: (inEUR * r).toFixed(2)
+      };
+    });
+  }, [convAmt, convBase, rates]);
+  if (!fData) return /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "column",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 40,
+      height: 40,
+      border: "3px solid #E8E2D9",
+      borderTopColor: "#1C3A2A",
+      borderRadius: "50%",
+      animation: "spin .8s linear infinite"
+    }
+  }), /*#__PURE__*/React.createElement("style", null, `@keyframes spin{to{transform:rotate(360deg)}}`));
+
+  // ── Türetilmiş veriler
+  const customCities = fData.cities || {};
+  const allCities = [...DEFAULT_CITIES, ...Object.values(customCities)];
+  const visited = fData.visited || {};
+  const placePhotos = fData.placePhotos || {};
+  const polls = Object.values(fData.polls || {}).sort((a, b) => b.id - a.id);
+  const expenses = Object.values(fData.expenses || {}).sort((a, b) => b.id - a.id);
+  const activeCityObj = allCities.find(c => c.id === city) || allCities[0];
+  const customCityPl = Object.values(fData.customPlaces || {}).filter(p => p.city === city).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const cityPlaces = [...(STATIC_PLACES[city] || []), ...customCityPl];
+  const cityVisCount = cityPlaces.filter(p => visited[p.id]).length;
+  const eurRes = settle(expenses, MEMBERS.length, "EUR");
+  const tryRes = settle(expenses, MEMBERS.length, "TRY");
+  const usdRes = settle(expenses, MEMBERS.length, "USD");
+  const toggleRoute = id => {
+    if (routeIds.includes(id)) setRouteIds(p => p.filter(x => x !== id));else setRouteIds(p => [...p, id]);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 480,
+      margin: "0 auto",
+      background: "#F9F7F2",
+      minHeight: "100vh",
+      paddingBottom: 100
+    }
+  }, /*#__PURE__*/React.createElement(Toast, {
+    toasts: toasts
+  }), !isOnline && /*#__PURE__*/React.createElement("div", {
+    className: "off-banner"
+  }, "\uD83D\uDCF5 \xC7evrimd\u0131\u015F\u0131 \u2014 \u0130nternet gelince otomatik senkronize olur"), /*#__PURE__*/React.createElement("div", {
+    className: "header"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", {
+    style: {
+      fontFamily: "'Libre Baskerville',serif",
+      fontSize: 27,
+      letterSpacing: "-.5px"
+    }
+  }, tab === "rota" ? `${activeCityObj === null || activeCityObj === void 0 ? void 0 : activeCityObj.emoji} ${activeCityObj === null || activeCityObj === void 0 ? void 0 : activeCityObj.name}` : tab === "masraf" ? "💰 Harcamalar" : tab === "analiz" ? "📊 Analiz" : "🗳️ Anketler"), tab === "rota" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      opacity: .8,
+      marginTop: 6
+    }
+  }, cityVisCount, "/", cityPlaces.length, " mekan tamamland\u0131")), tab === "rota" && /*#__PURE__*/React.createElement("button", {
+    className: "tap",
+    onClick: () => setShowAddPl(true),
+    style: {
+      background: "rgba(255,255,255,.15)",
+      color: "#fff",
+      border: "1px solid rgba(255,255,255,.3)",
+      padding: "6px 12px",
+      borderRadius: 10,
+      fontSize: 12,
+      fontWeight: 800,
+      cursor: "pointer",
+      fontFamily: "'Figtree',sans-serif"
+    }
+  }, "+ MEKAN")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginTop: 14,
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 6,
+      height: 6,
+      borderRadius: "50%",
+      background: syncing ? "#FFC107" : isOnline ? "#4CAF50" : "#D14D3F",
+      animation: syncing ? "pulse 1.5s infinite" : "none"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      opacity: .65,
+      letterSpacing: .5
+    }
+  }, syncing ? "KAYDEDİLİYOR" : isOnline ? "CANLI SENKRONİZASYON" : "ÇEVRİMDIŞI")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      alignItems: "center"
+    }
+  }, tab === "analiz" && /*#__PURE__*/React.createElement("button", {
+    className: "tap",
+    onClick: () => setShowConv(true),
+    style: {
+      background: "rgba(255,255,255,.15)",
+      color: "#fff",
+      border: "1px solid rgba(255,255,255,.25)",
+      padding: "5px 10px",
+      borderRadius: 8,
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Figtree',sans-serif"
+    }
+  }, "\uD83D\uDCB1 D\xF6viz"), notifPerm === "default" && typeof Notification !== "undefined" && /*#__PURE__*/React.createElement("button", {
+    className: "tap",
+    onClick: askNotif,
+    style: {
+      background: "rgba(255,255,255,.15)",
+      color: "#fff",
+      border: "1px solid rgba(255,255,255,.25)",
+      padding: "5px 10px",
+      borderRadius: 8,
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Figtree',sans-serif"
+    }
+  }, "\uD83D\uDD14 Bildirim")))), tab === "rota" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "tabs"
+  }, allCities.map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.id,
+    className: `tap ctab${city === c.id ? " on" : ""}`,
+    onClick: () => {
+      setCity(c.id);
+      setRouteIds([]);
+      setNearbyMode(false);
+    }
+  }, c.emoji, " ", c.name, !!customCities[c.id] && /*#__PURE__*/React.createElement("span", {
+    className: "tap",
+    onClick: e => {
+      e.stopPropagation();
+      if (window.confirm(`"${c.name}" silinsin mi?`)) {
+        wr(`cities/${c.id}`, null);
+        if (city === c.id) setCity("bremen");
+      }
+    },
+    style: {
+      fontSize: 11,
+      color: "var(--red)",
+      marginLeft: 2
+    }
+  }, "\u2715"))), /*#__PURE__*/React.createElement("div", {
+    className: "tap ctab",
+    style: {
+      color: "var(--acc)",
+      fontWeight: 800
+    },
+    onClick: () => setShowAddCity(true)
+  }, "+ \u015EEH\u0130R")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 18,
+      padding: "12px 16px",
+      margin: "14px 18px",
+      boxShadow: "var(--sh)",
+      border: "1.5px solid var(--border)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 800,
+      color: "var(--muted)",
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 8
+    }
+  }, "5 G\xFCnl\xFCk Hava Durumu"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 5
+    }
+  }, [0, 1, 2, 3, 4].map(i => {
+    const d = wxData === null || wxData === void 0 ? void 0 : wxData.daily;
+    const dt = d ? new Date(d.time[i]) : null;
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      className: "wx-day"
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        fontWeight: 800,
+        color: "var(--muted)",
+        marginBottom: 2
+      }
+    }, i === 0 ? "Bugün" : dt ? DAYS[dt.getDay()] : "…"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 18,
+        margin: "2px 0"
+      }
+    }, d ? WMO[d.weathercode[i]] || "🌡️" : "⏳"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        fontWeight: 800,
+        color: "#1C3A2A"
+      }
+    }, d ? Math.round(d.temperature_2m_max[i]) + "°" : "—"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        color: "var(--muted)"
+      }
+    }, d ? Math.round(d.temperature_2m_min[i]) + "°" : "—"));
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 18px",
+      display: "flex",
+      gap: 8,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: `tap chip${nearbyMode ? " on" : ""}`,
+    onClick: () => {
+      if (!nearbyMode) getLocation();else {
+        setNearbyMode(false);
+        setUserLoc(null);
+      }
+    },
+    style: {
+      flex: 1
+    }
+  }, nearbyMode ? "✕ Kapat" : "📍 Yakınımdakiler"), /*#__PURE__*/React.createElement("button", {
+    className: `tap chip${routeMode ? " on" : ""}`,
+    onClick: () => {
+      setRouteMode(p => !p);
+      if (routeMode) setRouteIds([]);
+    },
+    style: {
+      flex: 1
+    }
+  }, routeMode ? "✕ Rotayı Temizle" : "🗺️ Rota Çiz")), nearbyMode && nearbyPlaces !== null && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 18px",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 800,
+      color: "var(--muted)",
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 8
+    }
+  }, nearbyPlaces.length > 0 ? `${nearbyPlaces.length} mekan 600m içinde` : "600m içinde mekan bulunamadı"), nearbyPlaces.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.id,
+    style: {
+      background: "#fff",
+      borderRadius: 14,
+      padding: "12px 14px",
+      marginBottom: 8,
+      border: "1.5px solid var(--border)",
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      boxShadow: "var(--sh)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 14
+    }
+  }, p.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "var(--muted)",
+      marginTop: 2
+    }
+  }, fmtDist(p.dist), " \xB7 ~", walkMin(p.dist), " dk y\xFCr\xFCme")), /*#__PURE__*/React.createElement("a", {
+    href: p.url || `https://maps.google.com/?q=${encodeURIComponent(p.name)}`,
+    target: "_blank",
+    style: {
+      fontSize: 11,
+      color: "var(--acc)",
+      fontWeight: 700,
+      background: "rgba(184,104,42,.08)",
+      padding: "5px 10px",
+      borderRadius: 8,
+      flexShrink: 0
+    }
+  }, "Git \u2192")))), routeMode && routeStats && /*#__PURE__*/React.createElement("div", {
+    className: "route-info",
+    style: {
+      margin: "0 18px 12px"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      opacity: .7
+    }
+  }, "Se\xE7ilen rota"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 800
+    }
+  }, routeStats.stops, " durak \xB7 ", fmtDist(routeStats.dist))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "right"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      opacity: .7
+    }
+  }, "Y\xFCr\xFCme s\xFCresi"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 800
+    }
+  }, "~", routeStats.min, " dk"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 18px"
+    }
+  }, cityPlaces.map((p, idx) => {
+    const isV = !!visited[p.id];
+    const photos = Object.values(placePhotos[p.id] || {});
+    const routeIdx = routeIds.indexOf(p.id);
+    const isInRoute = routeIdx !== -1;
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.id,
+      className: `place-card${isV ? " vis" : ""}`,
+      style: {
+        border: isInRoute ? "2px solid var(--acc)" : "1.5px solid var(--border)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 14,
+        alignItems: "flex-start"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "tap",
+      onClick: () => wr(`visited/${p.id}`, !isV),
+      style: {
+        width: 28,
+        height: 28,
+        borderRadius: 9,
+        flexShrink: 0,
+        marginTop: 3,
+        border: "2px solid",
+        borderColor: isV ? "var(--green)" : "#D1CAC3",
+        background: isV ? "var(--green)" : "transparent",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, isV && /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#fff",
+        fontSize: 16
+      }
+    }, "\u2713")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 4,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 800,
+        fontSize: 15,
+        textDecoration: isV ? "line-through" : "none",
+        color: isV ? "var(--muted)" : "var(--text)"
+      }
+    }, p.name), isInRoute && /*#__PURE__*/React.createElement("div", {
+      className: "route-badge"
+    }, routeIdx + 1)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: "var(--muted)",
+        lineHeight: 1.4,
+        marginBottom: 10
+      }
+    }, p.desc), (photos.length > 0 || true) && /*#__PURE__*/React.createElement("div", {
+      className: "photo-grid"
+    }, photos.slice(0, 3).map(ph => /*#__PURE__*/React.createElement("div", {
+      key: ph.id,
+      style: {
+        position: "relative",
+        display: "inline-block"
+      }
+    }, /*#__PURE__*/React.createElement("img", {
+      src: ph.data,
+      className: "photo-thumb tap",
+      onClick: () => setViewPhoto({
+        data: ph.data,
+        placeId: p.id,
+        photoId: ph.id
+      }),
+      alt: ""
+    }), /*#__PURE__*/React.createElement("div", {
+      className: "tap",
+      onClick: () => wr(`placePhotos/${p.id}/${ph.id}`, null),
+      style: {
+        position: "absolute",
+        top: -5,
+        right: -5,
+        width: 18,
+        height: 18,
+        borderRadius: "50%",
+        background: "var(--red)",
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 10,
+        fontWeight: 800,
+        zIndex: 1,
+        boxShadow: "0 1px 4px rgba(0,0,0,.3)"
+      }
+    }, "\u2715"))), photos.length < 4 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      className: "photo-add tap",
+      onClick: () => {
+        var _fileInputRef$current;
+        return (_fileInputRef$current = fileInputRef.current[p.id]) === null || _fileInputRef$current === void 0 ? void 0 : _fileInputRef$current.click();
+      }
+    }, "\uD83D\uDCF7"), /*#__PURE__*/React.createElement("input", {
+      type: "file",
+      accept: "image/*",
+      capture: "environment",
+      style: {
+        display: "none"
+      },
+      ref: el => fileInputRef.current[p.id] = el,
+      onChange: e => handlePhoto(p.id, e.target.files[0])
+    }))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        marginTop: 10,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("a", {
+      href: p.url || `https://maps.google.com/?q=${encodeURIComponent(p.name + " " + ((activeCityObj === null || activeCityObj === void 0 ? void 0 : activeCityObj.name) || ""))}`,
+      target: "_blank",
+      style: {
+        fontSize: 11,
+        color: "var(--acc)",
+        fontWeight: 800,
+        background: "rgba(184,104,42,.08)",
+        padding: "4px 10px",
+        borderRadius: 8
+      }
+    }, "HAR\u0130TADA G\xD6R \u2192"), routeMode && /*#__PURE__*/React.createElement("button", {
+      className: "tap",
+      onClick: () => toggleRoute(p.id),
+      style: {
+        fontSize: 11,
+        fontWeight: 800,
+        border: "none",
+        padding: "4px 10px",
+        borderRadius: 8,
+        cursor: "pointer",
+        fontFamily: "'Figtree',sans-serif",
+        background: isInRoute ? "var(--acc)" : "var(--bg)",
+        color: isInRoute ? "#fff" : "var(--muted)"
+      }
+    }, isInRoute ? "✓ Rotada" : "+ Rotaya Ekle"), !p.isStatic && /*#__PURE__*/React.createElement("div", {
+      className: "tap",
+      onClick: () => wr(`customPlaces/${p.id}`, null),
+      style: {
+        fontSize: 10,
+        fontWeight: 800,
+        color: "var(--red)"
+      }
+    }, "S\u0130L")))));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "4px 18px 20px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      fontSize: 12,
+      color: "var(--text)",
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 10
+    }
+  }, "\uD83D\uDDFA\uFE0F \u015Eehir Haritas\u0131"), /*#__PURE__*/React.createElement("div", {
+    className: "map-wrap"
+  }, /*#__PURE__*/React.createElement("div", {
+    id: "leafmap",
+    style: {
+      width: "100%",
+      height: "100%"
+    }
+  })))), tab === "masraf" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      padding: 22,
+      borderRadius: 22,
+      border: "1.5px solid var(--border)",
+      boxShadow: "var(--sh)",
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      fontSize: 14,
+      color: "var(--text)",
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 16
+    }
+  }, "\uD83D\uDCCA Denge"), MEMBERS.map((m, i) => {
+    const hE = Math.abs(eurRes.bal[i]) > 0.01,
+      hT = Math.abs(tryRes.bal[i]) > 0.01,
+      hU = Math.abs(usdRes.bal[i]) > 0.01;
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        padding: "12px 0",
+        borderBottom: i < MEMBERS.length - 1 ? "1px solid #F5F0E8" : "none"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 800,
+        fontSize: 16,
+        marginBottom: 8
+      }
+    }, m), hE || hT || hU ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 8
+      }
+    }, hE && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 800,
+        padding: "8px 12px",
+        borderRadius: 10,
+        background: "var(--bg)",
+        color: eurRes.bal[i] >= 0 ? "var(--green)" : "var(--red)"
+      }
+    }, eurRes.bal[i] > 0 ? "+" : "", eurRes.bal[i].toFixed(2), "\u20AC"), hT && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 800,
+        padding: "8px 12px",
+        borderRadius: 10,
+        background: "var(--bg)",
+        color: tryRes.bal[i] >= 0 ? "var(--green)" : "var(--red)"
+      }
+    }, tryRes.bal[i] > 0 ? "+" : "", tryRes.bal[i].toFixed(0), "\u20BA"), hU && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 800,
+        padding: "8px 12px",
+        borderRadius: 10,
+        background: "var(--bg)",
+        color: usdRes.bal[i] >= 0 ? "var(--green)" : "var(--red)"
+      }
+    }, usdRes.bal[i] > 0 ? "+" : "", usdRes.bal[i].toFixed(2), "$")) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: "var(--muted)"
+      }
+    }, "Dengede \u2713"));
+  })), [{
+    l: "EUR",
+    s: "€",
+    r: eurRes
+  }, {
+    l: "TRY",
+    s: "₺",
+    r: tryRes
+  }, {
+    l: "USD",
+    s: "$",
+    r: usdRes
+  }].map(g => g.r.txs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    key: g.l,
+    style: {
+      background: "#1C3A2A",
+      color: "#fff",
+      padding: 18,
+      borderRadius: 18,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 800,
+      opacity: .6,
+      marginBottom: 10,
+      textTransform: "uppercase",
+      letterSpacing: 1
+    }
+  }, g.l, " \xD6DEME \xD6NER\u0130S\u0130"), g.r.txs.map((t, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+      background: "rgba(255,255,255,.06)",
+      padding: "10px 12px",
+      borderRadius: 12
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14
+    }
+  }, /*#__PURE__*/React.createElement("b", null, MEMBERS[t.from]), /*#__PURE__*/React.createElement("span", {
+    style: {
+      opacity: .5
+    }
+  }, " \u2192 "), /*#__PURE__*/React.createElement("b", null, MEMBERS[t.to])), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#FFD080",
+      fontWeight: 800,
+      fontSize: 15
+    }
+  }, t.amt.toFixed(2), g.s), /*#__PURE__*/React.createElement("button", {
+    className: "tap",
+    onClick: () => {
+      const id = Date.now();
+      wr(`expenses/${id}`, {
+        id,
+        desc: `${MEMBERS[t.from]}→${MEMBERS[t.to]} ödeme`,
+        amount: t.amt,
+        currency: g.l,
+        paidBy: t.from,
+        splitAmong: [t.to],
+        category: "other",
+        city: "global",
+        isSettlement: true
+      });
+    },
+    style: {
+      background: "#FFD080",
+      border: "none",
+      padding: "5px 10px",
+      borderRadius: 7,
+      fontSize: 10,
+      fontWeight: 800,
+      color: "#1C3A2A",
+      cursor: "pointer",
+      fontFamily: "'Figtree',sans-serif"
+    }
+  }, "\xD6dendi \u2713")))))), /*#__PURE__*/React.createElement("button", {
+    className: "btn-pri tap",
+    onClick: () => setShowAddExp(true)
+  }, "+ Yeni Masraf Ekle"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 800,
+      color: "var(--muted)",
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 12
+    }
+  }, "\u0130\u015Flem Ge\xE7mi\u015Fi"), expenses.map(e => {
+    const ec = allCities.find(c => c.id === e.city);
+    const cat = EXP_CATS.find(c => c.id === e.category) || {
+      emoji: "📦",
+      name: "Diğer"
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      key: e.id,
+      style: {
+        background: "#fff",
+        border: "1.5px solid var(--border)",
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 10,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        boxShadow: "var(--sh)"
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 14
+      }
+    }, e.isSettlement ? "💸 " : "", e.desc), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "var(--muted)",
+        marginTop: 3,
+        fontWeight: 600
+      }
+    }, MEMBERS[e.paidBy], " \xF6dedi \xB7 ", cat.emoji, " ", cat.name, ec && /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--acc)"
+      }
+    }, " \xB7 ", ec.emoji, " ", ec.name))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "right",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 4
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 800,
+        fontSize: 16
+      }
+    }, e.amount, SYM[e.currency]), /*#__PURE__*/React.createElement("div", {
+      className: "tap del-btn",
+      onClick: () => setShowDelExp(e.id)
+    }, "\u2715")));
+  }))), tab === "analiz" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "chart-wrap"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      fontSize: 13,
+      color: "var(--text)",
+      textTransform: "uppercase",
+      letterSpacing: .5
+    }
+  }, "\uD83C\uDF69 Harcama Da\u011F\u0131l\u0131m\u0131"), /*#__PURE__*/React.createElement("select", {
+    className: "chip",
+    value: chartCur,
+    onChange: e => setChartCur(e.target.value),
+    style: {
+      width: "auto",
+      padding: "6px 10px"
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "EUR"
+  }, "\u20AC EUR"), /*#__PURE__*/React.createElement("option", {
+    value: "TRY"
+  }, "\u20BA TRY"), /*#__PURE__*/React.createElement("option", {
+    value: "USD"
+  }, "$ USD"))), expenses.filter(e => e.currency === chartCur).length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      color: "var(--muted)",
+      fontSize: 13,
+      padding: "24px 0"
+    }
+  }, "Bu para biriminde masraf yok.") : /*#__PURE__*/React.createElement(PieChart, {
+    exps: expenses,
+    currency: chartCur
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "chart-wrap"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      fontSize: 13,
+      color: "var(--text)",
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 14
+    }
+  }, "\uD83C\uDFD9\uFE0F \u015Eehir Bazl\u0131 (EUR)"), allCities.map(c => {
+    const total = expenses.filter(e => e.city === c.id && e.currency === "EUR").reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+    if (!total) return null;
+    const max = Math.max(...allCities.map(cx => expenses.filter(e => e.city === cx.id && e.currency === "EUR").reduce((s, e) => s + (parseFloat(e.amount) || 0), 0)));
+    return /*#__PURE__*/React.createElement("div", {
+      key: c.id,
+      className: "stat-row"
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 600,
+        fontSize: 13
+      }
+    }, c.emoji, " ", c.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 80,
+        height: 6,
+        background: "#F0EBE3",
+        borderRadius: 3,
+        overflow: "hidden"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: "100%",
+        width: `${total / max * 100}%`,
+        background: "var(--acc)",
+        borderRadius: 3
+      }
+    })), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 800,
+        fontSize: 14,
+        minWidth: 60,
+        textAlign: "right"
+      }
+    }, "\u20AC", total.toFixed(2))));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "chart-wrap"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      fontSize: 13,
+      color: "var(--text)",
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 14
+    }
+  }, "\uD83D\uDC65 Ki\u015Fi Ba\u015F\u0131 \xD6deme (EUR)"), MEMBERS.map((m, i) => {
+    const paid = expenses.filter(e => e.currency === "EUR").reduce((s, e) => e.paidBy === i ? s + (parseFloat(e.amount) || 0) : s, 0);
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      className: "stat-row"
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 28,
+        height: 28,
+        borderRadius: "50%",
+        background: "#1C3A2A",
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 11,
+        fontWeight: 800
+      }
+    }, m[0]), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 600
+      }
+    }, m)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 800,
+        fontSize: 15
+      }
+    }, "\u20AC", paid.toFixed(2)));
+  }))), tab === "anket" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-pri tap",
+    style: {
+      marginBottom: 18
+    },
+    onClick: () => setShowPollCreate(true)
+  }, "+ Yeni Anket A\xE7"), polls.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      color: "var(--muted)",
+      fontSize: 13,
+      padding: "32px 0"
+    }
+  }, "Hen\xFCz anket yok. \u0130lk anketi sen a\xE7! \uD83D\uDDF3\uFE0F"), polls.map(poll => {
+    const votes = poll.votes || {};
+    const totalVotes = Object.keys(votes).length;
+    return /*#__PURE__*/React.createElement("div", {
+      key: poll.id,
+      className: "poll-card"
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 800,
+        fontSize: 16,
+        marginBottom: 4
+      }
+    }, poll.question), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "var(--muted)",
+        marginBottom: 14
+      }
+    }, MEMBERS[poll.createdBy], " \xB7 ", totalVotes, "/", MEMBERS.length, " oy kulland\u0131"), (poll.options || []).map((opt, oi) => {
+      const voteCount = Object.values(votes).filter(v => v === oi).length;
+      const pct = totalVotes ? Math.round(voteCount / totalVotes * 100) : 0;
+      const myVote = votes[0]; // member 0 = Emre (basitleştirilmiş)
+      const isMyVote = myVote === oi;
+      return /*#__PURE__*/React.createElement("div", {
+        key: oi,
+        className: `poll-opt tap${isMyVote ? " voted" : ""}`,
+        onClick: () => votePoll(poll.id, oi, 0)
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "poll-bar",
+        style: {
+          width: totalVotes ? `${pct}%` : "0%"
+        }
+      }), /*#__PURE__*/React.createElement("div", {
+        style: {
+          position: "relative",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: isMyVote ? 700 : 500,
+          fontSize: 14
+        }
+      }, isMyVote ? "✓ " : "", opt), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 800,
+          fontSize: 13,
+          color: "var(--pri)"
+        }
+      }, totalVotes ? `${pct}%` : "")), totalVotes > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 10,
+          color: "var(--muted)",
+          marginTop: 4,
+          position: "relative"
+        }
+      }, voteCount, " oy"));
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 10,
+        display: "flex",
+        justifyContent: "flex-end"
+      }
+    }, poll.createdBy === 0 && /*#__PURE__*/React.createElement("div", {
+      className: "tap",
+      onClick: () => wr(`polls/${poll.id}`, null),
+      style: {
+        fontSize: 11,
+        color: "var(--red)",
+        fontWeight: 700
+      }
+    }, "Anketi Sil")));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "nav-bar"
+  }, [{
+    k: "rota",
+    ic: "🗺️",
+    lb: "ROTA"
+  }, {
+    k: "masraf",
+    ic: "💳",
+    lb: "HARCAMA"
+  }, {
+    k: "analiz",
+    ic: "📊",
+    lb: "ANALİZ"
+  }, {
+    k: "anket",
+    ic: "🗳️",
+    lb: "ANKET"
+  }].map(t => /*#__PURE__*/React.createElement("div", {
+    key: t.k,
+    className: `nav-item tap${tab === t.k ? " on" : ""}`,
+    onClick: () => setTab(t.k)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 22,
+      marginBottom: 2
+    }
+  }, t.ic), /*#__PURE__*/React.createElement("div", null, t.lb)))), viewPhoto && /*#__PURE__*/React.createElement("div", {
+    className: "photo-full",
+    onClick: () => setViewPhoto(null)
+  }, /*#__PURE__*/React.createElement("img", {
+    src: viewPhoto.data || viewPhoto,
+    style: {
+      maxWidth: "100%",
+      maxHeight: "80vh",
+      borderRadius: 12,
+      objectFit: "contain"
+    },
+    alt: ""
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: 20,
+      right: 20,
+      color: "#fff",
+      fontSize: 28,
+      cursor: "pointer"
+    },
+    onClick: () => setViewPhoto(null)
+  }, "\u2715"), viewPhoto.placeId && viewPhoto.photoId && /*#__PURE__*/React.createElement("div", {
+    className: "tap",
+    onClick: e => {
+      e.stopPropagation();
+      wr(`placePhotos/${viewPhoto.placeId}/${viewPhoto.photoId}`, null);
+      setViewPhoto(null);
+    },
+    style: {
+      position: "absolute",
+      bottom: 30,
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "var(--red)",
+      color: "#fff",
+      padding: "10px 24px",
+      borderRadius: 14,
+      fontSize: 14,
+      fontWeight: 700,
+      boxShadow: "0 4px 16px rgba(0,0,0,.4)"
+    }
+  }, "\uD83D\uDDD1\uFE0F Foto\u011Fraf\u0131 Sil")), showDelExp && /*#__PURE__*/React.createElement("div", {
+    className: "overlay",
+    onClick: () => setShowDelExp(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontFamily: "'Libre Baskerville',serif",
+      marginBottom: 12,
+      fontSize: 18
+    }
+  }, "Emin misin?"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 14,
+      color: "var(--muted)",
+      marginBottom: 22
+    }
+  }, "Bu masraf kal\u0131c\u0131 olarak silinecek."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-out",
+    onClick: () => setShowDelExp(null)
+  }, "Vazge\xE7"), /*#__PURE__*/React.createElement("button", {
+    className: "tap",
+    style: {
+      flex: 1,
+      padding: 13,
+      borderRadius: 14,
+      border: "none",
+      background: "var(--red)",
+      color: "#fff",
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Figtree',sans-serif"
+    },
+    onClick: () => {
+      wr(`expenses/${showDelExp}`, null);
+      setShowDelExp(null);
+    }
+  }, "Sil")))), showConv && /*#__PURE__*/React.createElement("div", {
+    className: "overlay",
+    onClick: () => setShowConv(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontFamily: "'Libre Baskerville',serif",
+      fontSize: 20
+    }
+  }, "\uD83D\uDCB1 D\xF6viz \xC7evirici"), /*#__PURE__*/React.createElement("span", {
+    className: "tap",
+    onClick: () => setShowConv(false),
+    style: {
+      fontSize: 22,
+      color: "var(--muted)"
+    }
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 2
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Tutar"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: convAmt,
+    onChange: e => setConvAmt(e.target.value)
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Para Birimi"), /*#__PURE__*/React.createElement("select", {
+    value: convBase,
+    onChange: e => setConvBase(e.target.value),
+    style: {
+      width: "auto"
+    }
+  }, Object.keys(rates).map(c => /*#__PURE__*/React.createElement("option", {
+    key: c,
+    value: c
+  }, SYM[c] || c, " ", c))))), /*#__PURE__*/React.createElement("div", {
+    className: "conv-card"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 800,
+      opacity: .6,
+      marginBottom: 12,
+      textTransform: "uppercase",
+      letterSpacing: 1
+    }
+  }, "\xC7eviri Sonu\xE7lar\u0131"), convResult.map(_ref5 => {
+    let cur = _ref5.cur,
+      val = _ref5.val;
+    return /*#__PURE__*/React.createElement("div", {
+      key: cur,
+      className: "conv-row",
+      style: {
+        borderBottomColor: "rgba(255,255,255,.1)"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        opacity: .85
+      }
+    }, SYM[cur] || cur, " ", cur), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 20,
+        fontWeight: 800
+      }
+    }, val));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "var(--muted)",
+      textAlign: "center",
+      marginTop: 8
+    }
+  }, "Kurlar open.er-api.com'dan anl\u0131k"))), showPollCreate && /*#__PURE__*/React.createElement("div", {
+    className: "overlay",
+    onClick: () => setShowPollCreate(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontFamily: "'Libre Baskerville',serif",
+      fontSize: 20
+    }
+  }, "\uD83D\uDDF3\uFE0F Yeni Anket"), /*#__PURE__*/React.createElement("span", {
+    className: "tap",
+    onClick: () => setShowPollCreate(false),
+    style: {
+      fontSize: 22,
+      color: "var(--muted)"
+    }
+  }, "\u2715")), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Soru"), /*#__PURE__*/React.createElement("input", {
+    value: newPoll.question,
+    placeholder: "\xD6rn: Ak\u015Fam yeme\u011Fi nerede?",
+    style: {
+      marginBottom: 16
+    },
+    onChange: e => setNewPoll({
+      ...newPoll,
+      question: e.target.value
+    })
+  }), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Se\xE7enekler"), newPoll.options.map((opt, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: opt,
+    placeholder: `Seçenek ${i + 1}`,
+    style: {
+      flex: 1
+    },
+    onChange: e => {
+      const o = [...newPoll.options];
+      o[i] = e.target.value;
+      setNewPoll({
+        ...newPoll,
+        options: o
+      });
+    }
+  }), newPoll.options.length > 2 && /*#__PURE__*/React.createElement("div", {
+    className: "tap del-btn",
+    onClick: () => setNewPoll({
+      ...newPoll,
+      options: newPoll.options.filter((_, j) => j !== i)
+    })
+  }, "\u2715"))), newPoll.options.length < 5 && /*#__PURE__*/React.createElement("button", {
+    className: "btn-out tap",
+    style: {
+      marginBottom: 16
+    },
+    onClick: () => setNewPoll({
+      ...newPoll,
+      options: [...newPoll.options, ""]
+    })
+  }, "+ Se\xE7enek Ekle"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-out",
+    onClick: () => setShowPollCreate(false)
+  }, "\u0130ptal"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-pri tap",
+    onClick: () => {
+      if (!newPoll.question || newPoll.options.filter(o => o.trim()).length < 2) return;
+      const id = Date.now();
+      wr(`polls/${id}`, {
+        id,
+        question: newPoll.question,
+        options: newPoll.options.filter(o => o.trim()),
+        votes: {},
+        createdBy: 0,
+        createdAt: id
+      });
+      setNewPoll({
+        question: "",
+        options: ["", ""]
+      });
+      setShowPollCreate(false);
+    }
+  }, "Anketi Ba\u015Flat")))), showAddCity && /*#__PURE__*/React.createElement("div", {
+    className: "overlay",
+    onClick: () => setShowAddCity(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontFamily: "'Libre Baskerville',serif",
+      marginBottom: 20,
+      fontSize: 20
+    }
+  }, "\uD83D\uDCCD Yeni \u015Eehir"), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "\u015Eehir \u0130smi"), /*#__PURE__*/React.createElement("input", {
+    placeholder: "\xD6rn: Berlin",
+    value: newCity.name,
+    style: {
+      marginBottom: 20
+    },
+    onChange: e => setNewCity({
+      ...newCity,
+      name: e.target.value
+    })
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-out",
+    onClick: () => {
+      if (!newCity.name) return;
+      const id = "city_" + Date.now();
+      wr(`cities/${id}`, {
+        ...newCity,
+        id,
+        lat: 51,
+        lon: 10,
+        currency: "EUR"
+      });
+      setCity(id);
+      setShowAddCity(false);
+      setNewCity({
+        name: "",
+        emoji: "📍"
+      });
+    }
+  }, "Ekle"), /*#__PURE__*/React.createElement("button", {
+    className: "tap",
+    style: {
+      flex: 1,
+      padding: 13,
+      borderRadius: 14,
+      border: "none",
+      background: "linear-gradient(135deg,#4A00E0,#8E2DE2)",
+      color: "#fff",
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Figtree',sans-serif"
+    },
+    onClick: doAddCity,
+    disabled: aiLoading
+  }, aiLoading ? "Aranıyor…" : "✨ AI ile Doldur")))), showAddPl && /*#__PURE__*/React.createElement("div", {
+    className: "overlay",
+    onClick: () => setShowAddPl(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontFamily: "'Libre Baskerville',serif",
+      fontSize: 20
+    }
+  }, "\uD83D\uDCCC Mekan Ekle"), /*#__PURE__*/React.createElement("span", {
+    className: "tap",
+    onClick: () => setShowAddPl(false),
+    style: {
+      fontSize: 22,
+      color: "var(--muted)"
+    }
+  }, "\u2715")), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Mekan Ad\u0131"), /*#__PURE__*/React.createElement("input", {
+    placeholder: "Tarihi K\xF6pr\xFC",
+    style: {
+      marginBottom: 12
+    },
+    value: newPl.name,
+    onChange: e => setNewPl({
+      ...newPl,
+      name: e.target.value
+    })
+  }), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "A\xE7\u0131klama"), /*#__PURE__*/React.createElement("textarea", {
+    placeholder: "K\u0131sa a\xE7\u0131klama\u2026",
+    style: {
+      height: 72,
+      marginBottom: 12,
+      resize: "none"
+    },
+    value: newPl.desc,
+    onChange: e => setNewPl({
+      ...newPl,
+      desc: e.target.value
+    })
+  }), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Google Maps Linki"), /*#__PURE__*/React.createElement("input", {
+    placeholder: "https://maps.app.goo.gl/\u2026",
+    style: {
+      marginBottom: 14
+    },
+    value: newPl.url,
+    onChange: e => setNewPl({
+      ...newPl,
+      url: e.target.value
+    })
+  }), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Kimin \xD6nerisi?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap",
+      marginBottom: 20
+    }
+  }, MEMBERS.map((m, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "tap",
+    onClick: () => setNewPl({
+      ...newPl,
+      addedBy: i
+    }),
+    style: {
+      padding: "9px 14px",
+      borderRadius: 12,
+      fontSize: 13,
+      background: newPl.addedBy === i ? "#1C3A2A" : "var(--bg)",
+      color: newPl.addedBy === i ? "#fff" : "var(--text)",
+      fontWeight: 700
+    }
+  }, m))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-out",
+    onClick: () => setShowAddPl(false)
+  }, "\u0130ptal"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-pri tap",
+    onClick: () => {
+      if (!newPl.name) return;
+      const id = "c" + Date.now();
+      const maxO = customCityPl.length > 0 ? Math.max(...customCityPl.map(p => p.sortOrder || 0)) : -1;
+      wr(`customPlaces/${id}`, {
+        ...newPl,
+        id,
+        city,
+        sortOrder: maxO + 1,
+        lat: (activeCityObj === null || activeCityObj === void 0 ? void 0 : activeCityObj.lat) || 51,
+        lon: (activeCityObj === null || activeCityObj === void 0 ? void 0 : activeCityObj.lon) || 10
+      });
+      setShowAddPl(false);
+      setNewPl(initPl);
+    }
+  }, "Kaydet")))), showAddExp && /*#__PURE__*/React.createElement("div", {
+    className: "overlay",
+    onClick: () => setShowAddExp(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontFamily: "'Libre Baskerville',serif",
+      fontSize: 20
+    }
+  }, "\uD83D\uDCB8 Masraf Ekle"), /*#__PURE__*/React.createElement("span", {
+    className: "tap",
+    onClick: () => setShowAddExp(false),
+    style: {
+      fontSize: 22,
+      color: "var(--muted)"
+    }
+  }, "\u2715")), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "A\xE7\u0131klama"), /*#__PURE__*/React.createElement("input", {
+    placeholder: "Taksi, Yemek\u2026",
+    value: newExp.desc,
+    style: {
+      marginBottom: 12
+    },
+    onChange: e => setNewExp({
+      ...newExp,
+      desc: e.target.value
+    })
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 2
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Tutar"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    step: "0.01",
+    value: newExp.amount,
+    placeholder: "0.00",
+    onChange: e => setNewExp({
+      ...newExp,
+      amount: e.target.value
+    })
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Birim"), /*#__PURE__*/React.createElement("select", {
+    value: newExp.currency,
+    onChange: e => setNewExp({
+      ...newExp,
+      currency: e.target.value
+    }),
+    style: {
+      width: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "EUR"
+  }, "\u20AC"), /*#__PURE__*/React.createElement("option", {
+    value: "TRY"
+  }, "\u20BA"), /*#__PURE__*/React.createElement("option", {
+    value: "USD"
+  }, "$")))), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Kategori"), /*#__PURE__*/React.createElement("select", {
+    value: newExp.category,
+    style: {
+      marginBottom: 12
+    },
+    onChange: e => setNewExp({
+      ...newExp,
+      category: e.target.value
+    })
+  }, EXP_CATS.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.emoji, " ", c.name))), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "\u015Eehir"), /*#__PURE__*/React.createElement("select", {
+    value: newExp.city,
+    style: {
+      marginBottom: 12
+    },
+    onChange: e => setNewExp({
+      ...newExp,
+      city: e.target.value
+    })
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "global"
+  }, "\uD83C\uDF0D Genel"), allCities.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.emoji, " ", c.name))), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Kim \xD6dedi?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap",
+      marginBottom: 12
+    }
+  }, MEMBERS.map((m, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "tap",
+    onClick: () => setNewExp({
+      ...newExp,
+      paidBy: i
+    }),
+    style: {
+      padding: "9px 14px",
+      borderRadius: 12,
+      fontSize: 13,
+      fontWeight: 700,
+      background: newExp.paidBy === i ? "#1C3A2A" : "var(--bg)",
+      color: newExp.paidBy === i ? "#fff" : "var(--text)"
+    }
+  }, m))), /*#__PURE__*/React.createElement("label", {
+    className: "lbl"
+  }, "Kimler Payla\u015F\u0131yor?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap",
+      marginBottom: 20
+    }
+  }, MEMBERS.map((m, i) => {
+    const on = newExp.splitAmong.includes(i);
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      className: "tap",
+      onClick: () => {
+        const sa = on ? newExp.splitAmong.filter(x => x !== i) : [...newExp.splitAmong, i];
+        setNewExp({
+          ...newExp,
+          splitAmong: sa
+        });
+      },
+      style: {
+        padding: "9px 14px",
+        borderRadius: 12,
+        fontSize: 13,
+        fontWeight: 700,
+        background: on ? "var(--green)" : "transparent",
+        color: on ? "#fff" : "var(--muted)",
+        border: `1.5px solid ${on ? "var(--green)" : "var(--border)"}`
+      }
+    }, on ? "✓ " : "", m);
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-out",
+    onClick: () => setShowAddExp(false)
+  }, "\u0130ptal"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-pri tap",
+    onClick: () => {
+      if (!newExp.amount || !newExp.splitAmong.length) return;
+      const id = Date.now();
+      wr(`expenses/${id}`, {
+        ...newExp,
+        id,
+        amount: parseFloat(newExp.amount) || 0
+      });
+      setShowAddExp(false);
+      setNewExp(initExp);
+    }
+  }, "Ekle")))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
+
+</script>
+</body>
+</html>

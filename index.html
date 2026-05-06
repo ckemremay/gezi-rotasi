@@ -148,29 +148,6 @@ window._dp=`artifacts/${sanitizedAppId}/public/data`;
 window._db=firebase.database();
 const apiKey="";
 </script>
-<script>
-// iOS PWA güncelleme kontrolü: standalone modda açılıyorsa
-// sayfa her açılışta network'ten taze içerik al
-(function() {
-  if (window.navigator.standalone) {
-    // Ana ekrandan açılıyor - cache'i bypass et
-    var now = Date.now();
-    var lastReload = parseInt(sessionStorage.getItem('pwa_reload') || '0');
-    // Her oturumda bir kez force-reload
-    if (!lastReload) {
-      sessionStorage.setItem('pwa_reload', now);
-      // Sadece cache'den geliyorsa yenile (network mevcut ise)
-      if (navigator.onLine) {
-        fetch(location.href, {cache: 'no-store'})
-          .then(function(r) {
-            if (r.ok) { location.reload(true); }
-          })
-          .catch(function() {});
-      }
-    }
-  }
-})();
-</script>
 </head>
 <body>
 <div id="root"></div>

@@ -6,6 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Gezi Rotası">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- Force fresh content on every load (iOS PWA cache fix) -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/512/travel-ready.png">
 <title>Bremen & Hamburg · Gezi Rotası</title>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700&family=Figtree:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -142,6 +147,29 @@ firebase.initializeApp(firebaseConfig);
 window._dp=`artifacts/${sanitizedAppId}/public/data`;
 window._db=firebase.database();
 const apiKey="";
+</script>
+<script>
+// iOS PWA güncelleme kontrolü: standalone modda açılıyorsa
+// sayfa her açılışta network'ten taze içerik al
+(function() {
+  if (window.navigator.standalone) {
+    // Ana ekrandan açılıyor - cache'i bypass et
+    var now = Date.now();
+    var lastReload = parseInt(sessionStorage.getItem('pwa_reload') || '0');
+    // Her oturumda bir kez force-reload
+    if (!lastReload) {
+      sessionStorage.setItem('pwa_reload', now);
+      // Sadece cache'den geliyorsa yenile (network mevcut ise)
+      if (navigator.onLine) {
+        fetch(location.href, {cache: 'no-store'})
+          .then(function(r) {
+            if (r.ok) { location.reload(true); }
+          })
+          .catch(function() {});
+      }
+    }
+  }
+})();
 </script>
 </head>
 <body>

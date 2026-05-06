@@ -8,13 +8,6 @@
 <meta name="apple-mobile-web-app-title" content="Gezi Rotası">
 <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/512/travel-ready.png">
 <title>Bremen & Hamburg · Gezi Rotası</title>
-<!-- DNS prefetch & preconnect for faster CDN loading -->
-<link rel="preconnect" href="https://www.gstatic.com">
-<link rel="preconnect" href="https://unpkg.com">
-<link rel="preconnect" href="https://cdn.jsdelivr.net">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://ortak-gezi-default-rtdb.europe-west1.firebasedatabase.app">
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700&family=Figtree:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -893,24 +886,12 @@ function App() {
     return () => r.off();
   }, []);
 
-  // ── Firebase veri (localStorage cache for instant load)
+  // ── Firebase veri
   useEffect(() => {
-    // Immediately load from cache so no spinner after first visit
-    try {
-      const cached = localStorage.getItem("gezi_cache");
-      if (cached) {
-        const d = JSON.parse(cached);
-        if (d && typeof d === "object") setFData(d);
-      }
-    } catch {}
-    // Then sync from Firebase
     const r = window._db.ref(window._dp);
     r.on("value", s => {
       const d = s.val() || {};
       setFData(d);
-      try {
-        localStorage.setItem("gezi_cache", JSON.stringify(d));
-      } catch {}
     });
     return () => r.off();
   }, []);
@@ -1233,8 +1214,6 @@ function App() {
       };
     });
   }, [convAmt, convBase, rates]);
-
-  // Show minimal skeleton if no data yet (cache miss on first ever load)
   if (!fData) return /*#__PURE__*/React.createElement("div", {
     style: {
       height: "100vh",
@@ -1242,25 +1221,18 @@ function App() {
       alignItems: "center",
       justifyContent: "center",
       flexDirection: "column",
-      gap: 16,
-      background: "#F9F7F2"
+      gap: 12
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 44,
-      height: 44,
+      width: 40,
+      height: 40,
       border: "3px solid #E8E2D9",
       borderTopColor: "#1C3A2A",
       borderRadius: "50%",
       animation: "spin .8s linear infinite"
     }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 14,
-      color: "#7A6F66",
-      fontWeight: 600
-    }
-  }, "Ba\u011Flan\u0131yor\u2026"), /*#__PURE__*/React.createElement("style", null, `@keyframes spin{to{transform:rotate(360deg)}}`));
+  }), /*#__PURE__*/React.createElement("style", null, `@keyframes spin{to{transform:rotate(360deg)}}`));
 
   // ── Türetilmiş veriler
   const customCities = fData.cities || {};
@@ -1289,7 +1261,7 @@ function App() {
     }
   }, /*#__PURE__*/React.createElement(Toast, {
     toasts: toasts
-  }),  /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     className: "header"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1806,7 +1778,7 @@ function App() {
         fontSize: 16,
         marginBottom: 8
       }
-    }, m), hE || hT || hU ? /*#__PURE__*/React.createElement("div", {
+    }, m), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         flexWrap: "wrap",
@@ -2010,58 +1982,176 @@ function App() {
       boxShadow: "0 8px 24px rgba(28,58,42,.2)"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    style: {fontSize:11,fontWeight:800,opacity:.6,textTransform:"uppercase",letterSpacing:1,marginBottom:16}
-  }, "💱 Döviz Çevirici"),
-  /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:10,marginBottom:20}},
-    /*#__PURE__*/React.createElement("div", {style:{flex:2}},
-      /*#__PURE__*/React.createElement("div", {style:{fontSize:10,fontWeight:700,opacity:.6,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}, "Tutar"),
-      /*#__PURE__*/React.createElement("input", {
-        type:"number", value:convAmt,
-        onChange: e => setConvAmt(e.target.value),
-        style:{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.2)",borderRadius:12,padding:"12px 14px",color:"#fff",fontSize:20,fontWeight:700,width:"100%",outline:"none",fontFamily:"'Figtree',sans-serif",colorScheme:"dark"}
-      })
-    ),
-    /*#__PURE__*/React.createElement("div", null,
-      /*#__PURE__*/React.createElement("div", {style:{fontSize:10,fontWeight:700,opacity:.6,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}, "Birim"),
-      /*#__PURE__*/React.createElement("select", {
-        value:convBase, onChange:e=>setConvBase(e.target.value),
-        style:{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.2)",borderRadius:12,padding:"12px 14px",color:"#fff",fontSize:14,fontWeight:600,outline:"none",fontFamily:"'Figtree',sans-serif",colorScheme:"dark",width:"auto"}
-      },
-        Object.keys(rates).map(c => /*#__PURE__*/React.createElement("option", {key:c,value:c,style:{background:"#1C3A2A"}}, (SYM[c]||c)+" "+c))
-      )
-    )
-  ),
-  convResult.filter(function(x){return x.cur!==convBase;}).map(function(x){
-    var cur=x.cur, val=x.val;
+    style: {
+      fontSize: 11,
+      fontWeight: 800,
+      opacity: .6,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginBottom: 18
+    }
+  }, "\uD83D\uDCB1 D\xF6viz \xC7evirici"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 2
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      opacity: .6,
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 6
+    }
+  }, "Tutar"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: convAmt,
+    onChange: e => setConvAmt(e.target.value),
+    style: {
+      background: "rgba(255,255,255,.12)",
+      border: "1px solid rgba(255,255,255,.2)",
+      borderRadius: 12,
+      padding: "12px 14px",
+      color: "#fff",
+      fontSize: 22,
+      fontWeight: 700,
+      width: "100%",
+      outline: "none",
+      fontFamily: "'Figtree',sans-serif",
+      colorScheme: "dark"
+    }
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      opacity: .6,
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 6
+    }
+  }, "Birim"), /*#__PURE__*/React.createElement("select", {
+    value: convBase,
+    onChange: e => setConvBase(e.target.value),
+    style: {
+      background: "rgba(255,255,255,.12)",
+      border: "1px solid rgba(255,255,255,.2)",
+      borderRadius: 12,
+      padding: "12px 14px",
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: 600,
+      outline: "none",
+      fontFamily: "'Figtree',sans-serif",
+      colorScheme: "dark",
+      width: "auto"
+    }
+  }, Object.keys(rates).map(c => /*#__PURE__*/React.createElement("option", {
+    key: c,
+    value: c,
+    style: {
+      background: "#1C3A2A"
+    }
+  }, SYM[c] || c, " ", c))))), convResult.filter(x => x.cur !== convBase).map(_ref5 => {
+    let cur = _ref5.cur,
+      val = _ref5.val;
     return /*#__PURE__*/React.createElement("div", {
-      key:cur,
-      style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:"1px solid rgba(255,255,255,.1)"}
-    },
-      /*#__PURE__*/React.createElement("div", {style:{display:"flex",alignItems:"center",gap:10}},
-        /*#__PURE__*/React.createElement("div", {style:{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800}}, SYM[cur]||cur[0]),
-        /*#__PURE__*/React.createElement("div", null,
-          /*#__PURE__*/React.createElement("div", {style:{fontSize:14,fontWeight:700,opacity:.9}}, cur),
-          /*#__PURE__*/React.createElement("div", {style:{fontSize:10,opacity:.5}}, cur==="TRY"?"Türk Lirası":cur==="EUR"?"Euro":cur==="USD"?"Dolar":cur==="DKK"?"Danimarka Kronu":cur)
-        )
-      ),
-      /*#__PURE__*/React.createElement("div", {style:{fontSize:24,fontWeight:800,color:"#FFD080"}}, val)
-    );
-  }),
-  /*#__PURE__*/React.createElement("div", {style:{fontSize:10,opacity:.4,textAlign:"center",marginTop:14}}, "open.er-api.com · Anlık")
-  ),
-  /*#__PURE__*/React.createElement("div", {
-    style:{background:"#fff",borderRadius:18,padding:18,border:"1.5px solid var(--border)",boxShadow:"var(--sh)"}
-  },
-    /*#__PURE__*/React.createElement("div", {style:{fontWeight:800,fontSize:13,color:"var(--text)",textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}, "📈 Güncel Kurlar (1 EUR bazlı)"),
-    Object.entries(rates).filter(function(e){return e[0]!=="EUR";}).map(function(entry){
-      var cur=entry[0], r=entry[1];
-      return /*#__PURE__*/React.createElement("div", {key:cur, className:"stat-row"},
-        /*#__PURE__*/React.createElement("span", {style:{fontWeight:600,fontSize:14}}, (SYM[cur]||cur)+" "+cur),
-        /*#__PURE__*/React.createElement("span", {style:{fontWeight:800,fontSize:15}}, "1€ = "+r.toFixed(2)+" "+cur)
-      );
-    })
-  )), 
-   tab === "anket" && /*#__PURE__*/React.createElement("div", {
+      key: cur,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "13px 0",
+        borderBottom: "1px solid rgba(255,255,255,.1)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        background: "rgba(255,255,255,.12)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 16,
+        fontWeight: 800
+      }
+    }, SYM[cur] || cur[0]), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        fontWeight: 700,
+        opacity: .9
+      }
+    }, cur), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        opacity: .5
+      }
+    }, cur === "TRY" ? "Türk Lirası" : cur === "EUR" ? "Euro" : cur === "USD" ? "Amerikan Doları" : cur === "DKK" ? "Danimarka Kronu" : cur))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 24,
+        fontWeight: 800,
+        color: "#FFD080"
+      }
+    }, val));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      opacity: .4,
+      textAlign: "center",
+      marginTop: 14
+    }
+  }, "open.er-api.com \xB7 Anl\u0131k g\xFCncelleme")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 18,
+      padding: 18,
+      border: "1.5px solid var(--border)",
+      boxShadow: "var(--sh)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      fontSize: 13,
+      color: "var(--text)",
+      textTransform: "uppercase",
+      letterSpacing: .5,
+      marginBottom: 14
+    }
+  }, "\uD83D\uDCC8 G\xFCncel Kurlar (1 EUR bazl\u0131)"), Object.entries(rates).filter(_ref6 => {
+    let _ref7 = _slicedToArray(_ref6, 1),
+      c = _ref7[0];
+    return c !== "EUR";
+  }).map(_ref8 => {
+    let _ref9 = _slicedToArray(_ref8, 2),
+      cur = _ref9[0],
+      r = _ref9[1];
+    return /*#__PURE__*/React.createElement("div", {
+      key: cur,
+      className: "stat-row"
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 600,
+        fontSize: 14
+      }
+    }, SYM[cur] || cur, " ", cur), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 800,
+        fontSize: 15
+      }
+    }, "1\u20AC = ", r.toFixed(2), " ", cur));
+  }))), tab === "anket" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 18
     }
@@ -2154,14 +2244,14 @@ function App() {
   })), !isOnline && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
-      bottom: "calc(68px + env(safe-area-inset-bottom))",
+      bottom: "calc(64px + env(safe-area-inset-bottom))",
       left: "50%",
       transform: "translateX(-50%)",
       zIndex: 999,
-      background: "rgba(209,77,63,.93)",
+      background: "rgba(209,77,63,.94)",
       backdropFilter: "blur(8px)",
       color: "#fff",
-      padding: "7px 16px",
+      padding: "7px 18px",
       borderRadius: 20,
       fontSize: 11,
       fontWeight: 700,
@@ -2172,11 +2262,7 @@ function App() {
       gap: 6,
       animation: "tIn .3s ease"
     }
-  },
-  /*#__PURE__*/React.createElement("span", null, "📵"),
-  /*#__PURE__*/React.createElement("span", null, "Çevrimdışı — İnternet gelince senkronize olur")
-  ),
-  /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCF5"), /*#__PURE__*/React.createElement("span", null, "\xC7evrimd\u0131\u015F\u0131 \u2014 \u0130nternet gelince senkronize olur")), /*#__PURE__*/React.createElement("div", {
     className: "nav-bar"
   }, [{
     k: "rota",
@@ -2187,7 +2273,7 @@ function App() {
     ic: "💳",
     lb: "HARCAMA"
   }, {
-    k: "analiz",
+    k: "doviz",
     ic: "💱",
     lb: "DÖVİZ"
   }, {
@@ -2351,9 +2437,9 @@ function App() {
       textTransform: "uppercase",
       letterSpacing: 1
     }
-  }, "\xC7eviri Sonu\xE7lar\u0131"), convResult.map(_ref5 => {
-    let cur = _ref5.cur,
-      val = _ref5.val;
+  }, "\xC7eviri Sonu\xE7lar\u0131"), convResult.map(_ref0 => {
+    let cur = _ref0.cur,
+      val = _ref0.val;
     return /*#__PURE__*/React.createElement("div", {
       key: cur,
       className: "conv-row",

@@ -1,5 +1,6 @@
 // Gezi Rotası — service worker (PWA: çevrimdışı açılış + statik kaynak önbelleği)
-const CACHE = 'gezi-v1';
+// v2: HTML artık "önce ağ" ile yüklenir — güncellemeler anında görünür
+const CACHE = 'gezi-v2';
 const SHELL = ['./', './index.html', './manifest.json'];
 // Yalnızca statik CDN'ler önbelleğe alınır; Firebase auth/database istekleri ASLA önbelleğe alınmaz
 const CACHEABLE = ['unpkg.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'www.gstatic.com/firebasejs', 'img.icons8.com'];
@@ -20,16 +21,33 @@ self.addEventListener('fetch', e => {
   const sameOrigin = url.startsWith(self.location.origin);
   const cdnOk = CACHEABLE.some(d => url.includes(d));
   if (!sameOrigin && !cdnOk) return; // Firebase vb. ağa gitsin
-  e.respondWith(
-    caches.match(e.request).then(hit => {
-      const net = fetch(e.request).then(res => {
+
+  const isHTML = e.request.mode === 'navigate' || (sameOrigin && (url.endsWith('/') || url.includes('.html')));
+
+  if (isHTML) {
+    // HTML: önce ağ — güncel sürüm gelsin; çevrimdışıysa önbellekten aç
+    e.respondWith(
+      fetch(e.request).then(res => {
         if (res && res.ok) {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }
         return res;
-      }).catch(() => hit || (sameOrigin ? caches.match('./index.html') : undefined));
-      return hit || net;
-    })
+      }).catch(() => caches.match(e.request).then(hit => hit || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Statik kaynaklar (CDN, manifest): önce önbellek, yoksa ağ
+  e.respondWith(
+    caches.match(e.request).then(hit =>
+      hit || fetch(e.request).then(res => {
+        if (res && res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      })
+    )
   );
 });

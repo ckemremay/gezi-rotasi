@@ -258,6 +258,35 @@ button{font-family:'Inter',sans-serif;}
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);filter:blur(8px);
   animation:shine 3.2s var(--ease) infinite 1.2s;}
 @keyframes shine{0%{left:-30%}45%{left:110%}100%{left:110%}}
+/* ── Intro kart animasyonu (giriş ekranı üst bölüm) ── */
+.login2{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;
+  background:linear-gradient(180deg,#EFF6FF 0%,#E0E7FF 100%);}
+.intro-area{flex:1;position:relative;overflow:hidden;min-height:0;}
+.intro-ring{position:absolute;inset:0;}
+.intro-ring.spin{animation:spinSlow 60s linear infinite;transform-origin:50% 50%;}
+@keyframes spinSlow{to{transform:rotate(360deg)}}
+.fcard{position:absolute;left:50%;top:50%;width:56px;height:80px;margin:-40px 0 0 -28px;
+  perspective:600px;cursor:pointer;
+  transition:transform 1s var(--spring),opacity .7s var(--ease);will-change:transform;}
+.fcard-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;
+  transition:transform .6s var(--spring);}
+.fcard:hover .fcard-inner{transform:rotateY(180deg);}
+.fcard-front,.fcard-back{position:absolute;inset:0;border-radius:12px;overflow:hidden;
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  box-shadow:0 6px 16px rgba(37,99,235,.22);}
+.fcard-front img{width:100%;height:100%;object-fit:cover;display:block;}
+.fcard-front::after{content:"";position:absolute;inset:0;background:rgba(30,41,59,.08);}
+.fcard-back{background:#1E293B;border:1px solid #334155;display:flex;align-items:center;
+  justify-content:center;font-size:22px;transform:rotateY(180deg);}
+.intro-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  text-align:center;pointer-events:none;opacity:0;filter:blur(8px);
+  transition:opacity .9s var(--ease) .5s,filter .9s var(--ease) .5s;}
+.intro-center.show{opacity:1;filter:blur(0);}
+/* Alt giriş kartı */
+.login-sheet{background:#fff;border-radius:30px 30px 0 0;padding:28px 24px calc(30px + env(safe-area-inset-bottom));
+  box-shadow:0 -12px 40px rgba(37,99,235,.14);animation:sheetUp .6s var(--ease) both .3s;
+  max-width:520px;width:100%;margin:0 auto;}
+@keyframes sheetUp{from{transform:translateY(60px);opacity:0}to{transform:none;opacity:1}}
 </style>
 <script>
 const rawAppId=typeof __app_id!=='undefined'?__app_id:'default-app-id';
@@ -478,74 +507,84 @@ function PieChart({ exps, currency, memberCount }) {
   );
 }
 
-// ── DOT MAP (giriş ekranı animasyonlu dünya haritası) ───────────────────────
-function DotMap() {
-  const canvasRef = useRef(null);
-  const [dims, setDims] = useState({ width: 0, height: 0 });
-  const routes = [
-    { start: { x:100, y:150, delay:0 },   end: { x:200, y:80,  delay:2 },   color:"#2563eb" },
-    { start: { x:200, y:80,  delay:2 },   end: { x:260, y:120, delay:4 },   color:"#2563eb" },
-    { start: { x:50,  y:50,  delay:1 },   end: { x:150, y:180, delay:3 },   color:"#2563eb" },
-    { start: { x:280, y:60,  delay:0.5 }, end: { x:180, y:180, delay:2.5 }, color:"#2563eb" }
-  ];
+// ── INTRO KART ANİMASYONU (giriş ekranı: dağınık → hiza → dönen çember) ─────
+const INTRO_IMGS = [
+  "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=300&q=80",
+  "https://images.unsplash.com/photo-1519677100203-a0e668c92439?w=300&q=80",
+  "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=300&q=80",
+  "https://images.unsplash.com/photo-1467987506553-8f3916508521?w=300&q=80",
+  "https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=300&q=80",
+  "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=300&q=80",
+  "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=300&q=80",
+  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=300&q=80",
+  "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=300&q=80",
+  "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=300&q=80",
+  "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=300&q=80",
+  "https://images.unsplash.com/photo-1496568816309-51d7c20e3b21?w=300&q=80"
+];
+function IntroCards() {
+  const N = INTRO_IMGS.length;
+  const ref = useRef(null);
+  const [phase, setPhase] = useState("scatter"); // scatter → line → circle
+  const [size, setSize] = useState({ w: 360, h: 360 });
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !canvas.parentElement) return;
-    const ro = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect;
-      setDims({ width, height });
-      canvas.width = width; canvas.height = height;
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(es => {
+      const r = es[0].contentRect;
+      setSize({ w: r.width, h: r.height });
     });
-    ro.observe(canvas.parentElement);
+    ro.observe(el);
     return () => ro.disconnect();
   }, []);
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !dims.width || !dims.height) return;
-    const ctx = canvas.getContext("2d");
-    const { width, height } = dims;
-    // Kıta siluetlerini andıran nokta ızgarası
-    const dots = [];
-    for (let x = 0; x < width; x += 12) {
-      for (let y = 0; y < height; y += 12) {
-        const inShape =
-          ((x < width*0.25 && x > width*0.05) && (y < height*0.4  && y > height*0.1))  ||
-          ((x < width*0.25 && x > width*0.15) && (y < height*0.8  && y > height*0.4))  ||
-          ((x < width*0.45 && x > width*0.3)  && (y < height*0.35 && y > height*0.15)) ||
-          ((x < width*0.5  && x > width*0.35) && (y < height*0.65 && y > height*0.35)) ||
-          ((x < width*0.7  && x > width*0.45) && (y < height*0.5  && y > height*0.1))  ||
-          ((x < width*0.8  && x > width*0.65) && (y < height*0.8  && y > height*0.6));
-        if (inShape && Math.random() > 0.3) dots.push({ x, y, o: Math.random()*0.5 + 0.2 });
-      }
+    const t1 = setTimeout(() => setPhase("line"), 450);
+    const t2 = setTimeout(() => setPhase("circle"), 2100);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+  const scatter = useMemo(() => INTRO_IMGS.map(() => ({
+    x: (Math.random() - .5) * 900,
+    y: (Math.random() - .5) * 700,
+    r: (Math.random() - .5) * 180,
+    s: .5, o: 0
+  })), []);
+  const targets = INTRO_IMGS.map((_, i) => {
+    if (phase === "scatter") return scatter[i];
+    if (phase === "line") {
+      const spacing = Math.min(52, (size.w - 70) / N);
+      return { x: i * spacing - (N - 1) * spacing / 2, y: 0, r: 0, s: 1, o: 1 };
     }
-    let frame, startTime = Date.now();
-    const animate = () => {
-      ctx.clearRect(0, 0, width, height);
-      dots.forEach(d => {
-        ctx.beginPath(); ctx.arc(d.x, d.y, 1, 0, Math.PI*2);
-        ctx.fillStyle = `rgba(37,99,235,${d.o})`; ctx.fill();
-      });
-      const t = (Date.now() - startTime) / 1000;
-      routes.forEach(r => {
-        const el = t - r.start.delay;
-        if (el <= 0) return;
-        const p = Math.min(el / 3, 1);
-        const x = r.start.x + (r.end.x - r.start.x) * p;
-        const y = r.start.y + (r.end.y - r.start.y) * p;
-        ctx.beginPath(); ctx.moveTo(r.start.x, r.start.y); ctx.lineTo(x, y);
-        ctx.strokeStyle = r.color; ctx.lineWidth = 1.5; ctx.stroke();
-        ctx.beginPath(); ctx.arc(r.start.x, r.start.y, 3, 0, Math.PI*2); ctx.fillStyle = r.color; ctx.fill();
-        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fillStyle = "#3b82f6"; ctx.fill();
-        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI*2); ctx.fillStyle = "rgba(59,130,246,.4)"; ctx.fill();
-        if (p === 1) { ctx.beginPath(); ctx.arc(r.end.x, r.end.y, 3, 0, Math.PI*2); ctx.fillStyle = r.color; ctx.fill(); }
-      });
-      if (t > 15) startTime = Date.now();
-      frame = requestAnimationFrame(animate);
-    };
-    animate();
-    return () => cancelAnimationFrame(frame);
-  }, [dims]);
-  return <canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%"}}/>;
+    const radius = Math.min(size.w, size.h) * 0.36;
+    const ang = (i / N) * 360;
+    const rad = ang * Math.PI / 180;
+    return { x: Math.cos(rad) * radius, y: Math.sin(rad) * radius, r: ang + 90, s: 1, o: 1 };
+  });
+  return (
+    <div ref={ref} className="intro-area">
+      <div className={phase === "circle" ? "intro-ring spin" : "intro-ring"}>
+        {INTRO_IMGS.map((src, i) => {
+          const t = targets[i];
+          return (
+            <div key={i} className="fcard" style={{
+              transform: `translate(${t.x}px,${t.y}px) rotate(${t.r}deg) scale(${t.s})`,
+              opacity: t.o,
+              transitionDelay: phase === "circle" ? `${i * 35}ms` : `${i * 22}ms`
+            }}>
+              <div className="fcard-inner">
+                <div className="fcard-front"><img src={src} alt="" loading="lazy"/></div>
+                <div className="fcard-back">📍</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className={`intro-center${phase === "circle" ? " show" : ""}`}>
+        <div style={{fontSize:34}}>🧭</div>
+        <div className="login-title" style={{fontSize:24}}>Gezi Rotası</div>
+        <div style={{fontSize:11,fontWeight:700,letterSpacing:".18em",color:"#94A3B8",marginTop:6}}>BİRLİKTE KEŞFEDİN</div>
+      </div>
+    </div>
+  );
 }
 
 // ── ANA UYGULAMA ─────────────────────────────────────────────────────────────
@@ -826,40 +865,31 @@ function App() {
     return Object.entries(rates).map(([cur, r]) => ({ cur, val: (inEUR * r).toFixed(2) }));
   }, [convAmt, convBase, rates]);
 
-  // ── Giriş ekranı (Travel Connect tasarımı)
+  // ── Giriş ekranı: üstte kart animasyonu, altta giriş paneli
   if (user === null) return (
-    <div className="login-bg">
-      <div className="login-card">
-        <div className="login-left">
-          <DotMap/>
-          <div className="login-overlay">
-            <div className="login-logo">🧭</div>
-            <div className="login-title">Gezi Rotası</div>
-            <div className="login-sub">Rotanı planla, masrafları paylaş, grupla birlikte keşfet.</div>
-          </div>
+    <div className="login2">
+      <IntroCards/>
+      <div className="login-sheet">
+        <h1 style={{fontSize:24,fontWeight:800,color:"#1E293B",marginBottom:4,letterSpacing:"-.01em"}}>Tekrar hoş geldin</h1>
+        <p style={{fontSize:14,color:"#64748B",marginBottom:22}}>Rotanı planla, masrafları paylaş, grupla birlikte keşfet.</p>
+        <button className="gbtn" onClick={doLogin}>
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/>
+            <path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/>
+          </svg>
+          Google ile Giriş Yap
+        </button>
+        {authErr && <div style={{fontSize:12,color:"var(--red)",background:"rgba(228,84,63,.08)",padding:"10px 14px",borderRadius:12,marginTop:14}}>{authErr}</div>}
+        <div style={{display:"flex",alignItems:"center",gap:10,margin:"20px 0 12px"}}>
+          <div style={{flex:1,height:1,background:"#E2E8F0"}}/>
+          <span style={{fontSize:12,color:"#94A3B8"}}>güvenli giriş</span>
+          <div style={{flex:1,height:1,background:"#E2E8F0"}}/>
         </div>
-        <div className="login-right">
-          <h1 style={{fontSize:26,fontWeight:800,color:"#1E293B",marginBottom:4,letterSpacing:"-.01em"}}>Tekrar hoş geldin</h1>
-          <p style={{fontSize:14,color:"#64748B",marginBottom:28}}>Devam etmek için hesabınla giriş yap</p>
-          <button className="gbtn" onClick={doLogin}>
-            <svg width="20" height="20" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/>
-              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/>
-              <path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/>
-              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/>
-            </svg>
-            Google ile Giriş Yap
-          </button>
-          {authErr && <div style={{fontSize:12,color:"var(--red)",background:"rgba(228,84,63,.08)",padding:"10px 14px",borderRadius:12,marginTop:14}}>{authErr}</div>}
-          <div style={{display:"flex",alignItems:"center",gap:10,margin:"24px 0 14px"}}>
-            <div style={{flex:1,height:1,background:"#E2E8F0"}}/>
-            <span style={{fontSize:12,color:"#94A3B8"}}>güvenli giriş</span>
-            <div style={{flex:1,height:1,background:"#E2E8F0"}}/>
-          </div>
-          <p style={{fontSize:12,color:"#94A3B8",textAlign:"center",lineHeight:1.6}}>
-            Kimlik doğrulaması Google tarafından yapılır.<br/>Şifreniz bu uygulamayla paylaşılmaz.
-          </p>
-        </div>
+        <p style={{fontSize:12,color:"#94A3B8",textAlign:"center",lineHeight:1.6}}>
+          Kimlik doğrulaması Google tarafından yapılır. Şifreniz bu uygulamayla paylaşılmaz.
+        </p>
       </div>
     </div>
   );

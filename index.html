@@ -24,9 +24,9 @@
 /* ════ 2026 DESIGN TOKENS ════ */
 :root{
   --ink:#1A1A1A;--ink-2:#5C5650;--ink-3:#9C948B;
-  --canvas:#FAF8F5;--surface:#FFFFFF;--surface-2:#F3EFE9;
-  --pri:#1C3A2A;--pri2:#2D5A42;
-  --acc:#C96F3B;--acc-soft:#FBEFE6;
+  --canvas:#F6F8FE;--surface:#FFFFFF;--surface-2:#EEF2FB;
+  --pri:#2563EB;--pri2:#4F46E5;
+  --acc:#4F46E5;--acc-soft:#EEF2FF;
   --green:#3E8A60;--red:#E4543F;--amber:#E2A93B;
   --bg:var(--canvas);--text:var(--ink);--muted:var(--ink-3);--border:rgba(26,26,26,.08);
   --e1:0 1px 2px rgba(26,26,26,.04),0 2px 8px rgba(26,26,26,.04);
@@ -43,7 +43,7 @@ html,body{background:var(--bg);font-family:'Inter',sans-serif;color:var(--text);
 input,select,textarea{font-family:'Inter',sans-serif;outline:none;font-size:15px;
   border:1.5px solid var(--border);transition:border-color var(--base) var(--ease),box-shadow var(--base) var(--ease);
   color:var(--text);background:#fff;border-radius:14px;padding:12px 14px;width:100%;}
-input:focus,select:focus,textarea:focus{border-color:var(--pri);box-shadow:0 0 0 3px rgba(28,58,42,.08);}
+input:focus,select:focus,textarea:focus{border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.10);}
 ::-webkit-scrollbar{display:none;}
 button{font-family:'Inter',sans-serif;}
 .tap{cursor:pointer;user-select:none;transition:transform var(--fast) var(--ease),opacity var(--fast),box-shadow var(--base) var(--ease),background var(--base) var(--ease);}
@@ -56,12 +56,12 @@ button{font-family:'Inter',sans-serif;}
   animation:slideUp .25s var(--ease);}
 @media(min-width:480px){.modal{border-radius:28px;}}
 @keyframes slideUp{from{transform:translateY(40px);opacity:.4}to{transform:translateY(0);opacity:1}}
-.btn-pri{background:var(--ink);color:#fff;border:none;padding:15px;
+.btn-pri{background:linear-gradient(90deg,#3B82F6,#4F46E5);color:#fff;border:none;padding:15px;
   border-radius:16px;font-weight:700;font-size:15px;width:100%;cursor:pointer;
-  transition:background var(--base) var(--ease),transform var(--fast) var(--ease),box-shadow var(--base) var(--ease);
-  box-shadow:var(--e2);}
-.btn-pri:hover{background:#000;box-shadow:var(--e3);}
-.btn-pri:active{transform:scale(.97);}
+  transition:filter var(--base) var(--ease),transform var(--fast) var(--ease),box-shadow var(--base) var(--ease);
+  box-shadow:0 6px 18px rgba(59,130,246,.30);}
+.btn-pri:hover{filter:brightness(.94);box-shadow:0 10px 26px rgba(59,130,246,.40);}
+.btn-pri:active{transform:scale(.95);}
 .btn-out{background:#fff;border:1.5px solid var(--border);padding:13px;
   border-radius:16px;font-weight:600;font-size:14px;width:100%;color:var(--pri);cursor:pointer;
   transition:background var(--base) var(--ease),transform var(--fast) var(--ease);}
@@ -70,10 +70,10 @@ button{font-family:'Inter',sans-serif;}
 .lbl{font-size:11px;font-weight:800;color:var(--ink-3);
   text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block;}
 /* Hero header */
-.header{background:linear-gradient(165deg,#1C3A2A 0%,#2D5A42 78%,#37684E 100%);color:#fff;
+.header{background:linear-gradient(165deg,#2563EB 0%,#4F46E5 80%,#6366F1 100%);color:#fff;
   padding:calc(40px + env(safe-area-inset-top)) 22px 20px;
   border-bottom-left-radius:32px;border-bottom-right-radius:32px;
-  box-shadow:0 10px 28px rgba(28,58,42,.18);position:relative;overflow:hidden;}
+  box-shadow:0 10px 28px rgba(37,99,235,.22);position:relative;overflow:hidden;}
 .header::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;
   border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.10),transparent 70%);pointer-events:none;}
 .hero-top{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:2;}
@@ -119,7 +119,8 @@ button{font-family:'Inter',sans-serif;}
   margin-bottom:13px;box-shadow:var(--e1);border:1px solid var(--border);
   transition:transform var(--base) var(--ease),box-shadow var(--base) var(--ease);
   animation:fadeUp .45s var(--ease) both;}
-.place-card:hover{transform:scale(1.02);box-shadow:var(--e3);}
+.place-card:hover{transform:scale(1.03);box-shadow:var(--e3);}
+.place-card:active{transform:scale(.95);}
 .place-card:nth-child(1){animation-delay:.04s}.place-card:nth-child(2){animation-delay:.1s}
 .place-card:nth-child(3){animation-delay:.16s}.place-card:nth-child(4){animation-delay:.22s}
 .place-card:nth-child(5){animation-delay:.28s}.place-card:nth-child(n+6){animation-delay:.34s}
@@ -139,10 +140,10 @@ button{font-family:'Inter',sans-serif;}
 .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 6px;
   border-radius:20px;cursor:pointer;color:var(--ink-3);font-size:9.5px;font-weight:700;letter-spacing:.04em;
   transition:all var(--base) var(--ease);}
-.nav-item.on{color:var(--pri);background:rgba(28,58,42,.08);}
+.nav-item.on{color:var(--pri);background:rgba(37,99,235,.10);}
 .nav-item .ic{font-size:20px;transition:transform var(--base) var(--spring);}
 .nav-item:active .ic{transform:scale(.85);}
-.nav-item.on .ic{transform:translateY(-1px) scale(1.08);}
+.nav-item.on .ic{transform:translateY(-1px) scale(1.22);}
 /* FAB */
 .fab{position:fixed;right:max(18px,calc(50% - 242px));bottom:calc(86px + env(safe-area-inset-bottom));z-index:900;
   display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border:none;
@@ -170,7 +171,7 @@ button{font-family:'Inter',sans-serif;}
 .photo-grid{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
 .photo-thumb{width:64px;height:64px;border-radius:14px;object-fit:cover;border:2px solid var(--border);cursor:pointer;
   transition:transform var(--base) var(--ease);}
-.photo-thumb:hover{transform:scale(1.06);}
+.photo-thumb:hover{transform:scale(1.08);}
 .photo-add{width:64px;height:64px;border-radius:14px;border:2px dashed var(--border);
   display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;background:var(--surface-2);
   transition:background var(--base) var(--ease);}
@@ -180,9 +181,9 @@ button{font-family:'Inter',sans-serif;}
 .poll-opt{padding:13px 15px;border-radius:14px;border:1.5px solid var(--border);
   margin-bottom:8px;cursor:pointer;transition:all var(--base) var(--ease);position:relative;overflow:hidden;}
 .poll-opt:hover{box-shadow:var(--e1);}
-.poll-opt.voted{border-color:var(--pri);background:rgba(28,58,42,.04);}
+.poll-opt.voted{border-color:var(--pri);background:rgba(37,99,235,.05);}
 .poll-opt.closed{cursor:default;opacity:.85;}
-.poll-bar{position:absolute;left:0;top:0;bottom:0;background:rgba(28,58,42,.07);transition:width .5s var(--ease);}
+.poll-bar{position:absolute;left:0;top:0;bottom:0;background:rgba(37,99,235,.08);transition:width .5s var(--ease);}
 .conv-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;
   border-bottom:1px solid rgba(255,255,255,.12);}
 .conv-row:last-child{border-bottom:none;}
@@ -212,7 +213,7 @@ button{font-family:'Inter',sans-serif;}
 .list-row:nth-child(odd){animation-delay:.05s}.list-row:nth-child(even){animation-delay:.12s}
 .sec-title{font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;
   letter-spacing:.07em;margin:4px 0 10px;}
-.bal-hero{background:linear-gradient(150deg,#1C3A2A,#2D5A42);border-radius:24px;
+.bal-hero{background:linear-gradient(150deg,#2563EB,#4F46E5);border-radius:24px;
   padding:20px;color:#fff;box-shadow:var(--e2);margin-bottom:14px;cursor:pointer;
   transition:transform var(--base) var(--ease),box-shadow var(--base) var(--ease);
   animation:fadeUp .45s var(--ease) both;}
@@ -222,6 +223,41 @@ button{font-family:'Inter',sans-serif;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .spinner{width:38px;height:38px;border:3px solid var(--surface-2);border-top-color:var(--pri);
   border-radius:50%;animation:spin .8s linear infinite;}
+/* ── Yükleme: spinner yerine ilerleme çubuğu ── */
+.loadbar{width:min(260px,70vw);height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;position:relative;}
+.loadbar>div{position:absolute;top:0;bottom:0;width:40%;border-radius:3px;
+  background:linear-gradient(90deg,#3B82F6,#4F46E5);animation:loadSlide 1.1s var(--ease) infinite;}
+@keyframes loadSlide{0%{left:-40%}100%{left:100%}}
+/* ── Giriş ekranı (Travel Connect uyarlaması) ── */
+.login-bg{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;
+  background:linear-gradient(135deg,#EFF6FF,#E0E7FF);}
+.login-card{width:100%;max-width:880px;display:flex;background:#fff;border-radius:24px;
+  overflow:hidden;box-shadow:0 25px 60px rgba(37,99,235,.18);animation:loginIn .5s var(--ease) both;}
+@keyframes loginIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.login-left{display:none;width:50%;min-height:560px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#EFF6FF,#E0E7FF);border-right:1px solid #F1F5F9;}
+@media(min-width:768px){.login-left{display:block;}}
+.login-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:32px;z-index:10;text-align:center;}
+.login-logo{height:52px;width:52px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#4F46E5);
+  display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;
+  box-shadow:0 10px 26px rgba(59,130,246,.35);margin-bottom:20px;animation:fadeUp .5s var(--ease) both .5s;}
+.login-title{font-size:28px;font-weight:800;letter-spacing:-.01em;
+  background:linear-gradient(90deg,#2563EB,#4F46E5);-webkit-background-clip:text;background-clip:text;
+  color:transparent;animation:fadeUp .5s var(--ease) both .6s;}
+.login-sub{font-size:13px;color:#64748B;max-width:280px;margin-top:8px;animation:fadeUp .5s var(--ease) both .7s;}
+.login-right{width:100%;padding:36px 28px;display:flex;flex-direction:column;justify-content:center;background:#fff;}
+@media(min-width:768px){.login-right{width:50%;padding:48px 40px;}}
+.gbtn{position:relative;overflow:hidden;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;padding:14px;color:#334155;
+  font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 1px 3px rgba(15,23,42,.06);
+  transition:background var(--base) var(--ease),transform var(--fast) var(--ease),box-shadow var(--base) var(--ease);}
+.gbtn:hover{background:#F1F5F9;box-shadow:0 8px 20px rgba(37,99,235,.12);}
+.gbtn:active{transform:scale(.97);}
+.gbtn::after{content:"";position:absolute;top:0;bottom:0;left:-30%;width:24%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);filter:blur(8px);
+  animation:shine 3.2s var(--ease) infinite 1.2s;}
+@keyframes shine{0%{left:-30%}45%{left:110%}100%{left:110%}}
 </style>
 <script>
 const rawAppId=typeof __app_id!=='undefined'?__app_id:'default-app-id';
@@ -442,6 +478,76 @@ function PieChart({ exps, currency, memberCount }) {
   );
 }
 
+// ── DOT MAP (giriş ekranı animasyonlu dünya haritası) ───────────────────────
+function DotMap() {
+  const canvasRef = useRef(null);
+  const [dims, setDims] = useState({ width: 0, height: 0 });
+  const routes = [
+    { start: { x:100, y:150, delay:0 },   end: { x:200, y:80,  delay:2 },   color:"#2563eb" },
+    { start: { x:200, y:80,  delay:2 },   end: { x:260, y:120, delay:4 },   color:"#2563eb" },
+    { start: { x:50,  y:50,  delay:1 },   end: { x:150, y:180, delay:3 },   color:"#2563eb" },
+    { start: { x:280, y:60,  delay:0.5 }, end: { x:180, y:180, delay:2.5 }, color:"#2563eb" }
+  ];
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !canvas.parentElement) return;
+    const ro = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect;
+      setDims({ width, height });
+      canvas.width = width; canvas.height = height;
+    });
+    ro.observe(canvas.parentElement);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !dims.width || !dims.height) return;
+    const ctx = canvas.getContext("2d");
+    const { width, height } = dims;
+    // Kıta siluetlerini andıran nokta ızgarası
+    const dots = [];
+    for (let x = 0; x < width; x += 12) {
+      for (let y = 0; y < height; y += 12) {
+        const inShape =
+          ((x < width*0.25 && x > width*0.05) && (y < height*0.4  && y > height*0.1))  ||
+          ((x < width*0.25 && x > width*0.15) && (y < height*0.8  && y > height*0.4))  ||
+          ((x < width*0.45 && x > width*0.3)  && (y < height*0.35 && y > height*0.15)) ||
+          ((x < width*0.5  && x > width*0.35) && (y < height*0.65 && y > height*0.35)) ||
+          ((x < width*0.7  && x > width*0.45) && (y < height*0.5  && y > height*0.1))  ||
+          ((x < width*0.8  && x > width*0.65) && (y < height*0.8  && y > height*0.6));
+        if (inShape && Math.random() > 0.3) dots.push({ x, y, o: Math.random()*0.5 + 0.2 });
+      }
+    }
+    let frame, startTime = Date.now();
+    const animate = () => {
+      ctx.clearRect(0, 0, width, height);
+      dots.forEach(d => {
+        ctx.beginPath(); ctx.arc(d.x, d.y, 1, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(37,99,235,${d.o})`; ctx.fill();
+      });
+      const t = (Date.now() - startTime) / 1000;
+      routes.forEach(r => {
+        const el = t - r.start.delay;
+        if (el <= 0) return;
+        const p = Math.min(el / 3, 1);
+        const x = r.start.x + (r.end.x - r.start.x) * p;
+        const y = r.start.y + (r.end.y - r.start.y) * p;
+        ctx.beginPath(); ctx.moveTo(r.start.x, r.start.y); ctx.lineTo(x, y);
+        ctx.strokeStyle = r.color; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.beginPath(); ctx.arc(r.start.x, r.start.y, 3, 0, Math.PI*2); ctx.fillStyle = r.color; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fillStyle = "#3b82f6"; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI*2); ctx.fillStyle = "rgba(59,130,246,.4)"; ctx.fill();
+        if (p === 1) { ctx.beginPath(); ctx.arc(r.end.x, r.end.y, 3, 0, Math.PI*2); ctx.fillStyle = r.color; ctx.fill(); }
+      });
+      if (t > 15) startTime = Date.now();
+      frame = requestAnimationFrame(animate);
+    };
+    animate();
+    return () => cancelAnimationFrame(frame);
+  }, [dims]);
+  return <canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%"}}/>;
+}
+
 // ── ANA UYGULAMA ─────────────────────────────────────────────────────────────
 const initExp = { desc:"", amount:"", currency:"EUR", paidBy:null, splitAmong:[], category:"food", city:"bremen", receipt:null };
 const initPl  = { name:"", desc:"", url:"" };
@@ -625,7 +731,7 @@ function App() {
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM" }).addTo(m);
         places.forEach(p => {
           if (!p.lat || !p.lon) return;
-          L.circleMarker([p.lat, p.lon], { radius:8, fillColor:"#B8682A", color:"#fff", weight:3, fillOpacity:.9 })
+          L.circleMarker([p.lat, p.lon], { radius:8, fillColor:"#4F46E5", color:"#fff", weight:3, fillOpacity:.9 })
             .addTo(m).bindPopup(`<b>${esc(p.name)}</b><br><small>${esc(p.desc || "")}</small>`);
         });
         mapRef.current = m;
@@ -636,7 +742,7 @@ function App() {
       if (routeIds.length >= 2 && mapRef.current) {
         const latlngs = routeIds.map(id => places.find(p => p.id === id)).filter(p => p && p.lat).map(p => [p.lat, p.lon]);
         if (latlngs.length >= 2) {
-          polyRef.current = L.polyline(latlngs, { color:"#B8682A", weight:4, dashArray:"10,6", opacity:.85 }).addTo(mapRef.current);
+          polyRef.current = L.polyline(latlngs, { color:"#4F46E5", weight:4, dashArray:"10,6", opacity:.85 }).addTo(mapRef.current);
           mapRef.current.fitBounds(L.latLngBounds(latlngs), { padding:[30,30] });
         }
       }
@@ -720,21 +826,49 @@ function App() {
     return Object.entries(rates).map(([cur, r]) => ({ cur, val: (inEUR * r).toFixed(2) }));
   }, [convAmt, convBase, rates]);
 
-  // ── Giriş ekranı
+  // ── Giriş ekranı (Travel Connect tasarımı)
   if (user === null) return (
-    <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:14,padding:24,maxWidth:480,margin:"0 auto",textAlign:"center"}}>
-      <div style={{fontSize:52}}>🧭</div>
-      <h1 style={{fontFamily:"'Libre Baskerville',serif",fontSize:26,color:"var(--pri)"}}>Gezi Rotası</h1>
-      <p style={{fontSize:14,color:"var(--muted)",marginBottom:6}}>Devam etmek için giriş yap</p>
-      <button className="btn-pri tap" style={{maxWidth:300}} onClick={doLogin}>Google ile Giriş Yap</button>
-      {authErr && <div style={{fontSize:12,color:"var(--red)",maxWidth:320,background:"rgba(209,77,63,.08)",padding:"10px 14px",borderRadius:12}}>{authErr}</div>}
-      <p style={{fontSize:11,color:"var(--muted)",maxWidth:300}}>Giriş bilgileri Google tarafından doğrulanır.</p>
+    <div className="login-bg">
+      <div className="login-card">
+        <div className="login-left">
+          <DotMap/>
+          <div className="login-overlay">
+            <div className="login-logo">🧭</div>
+            <div className="login-title">Gezi Rotası</div>
+            <div className="login-sub">Rotanı planla, masrafları paylaş, grupla birlikte keşfet.</div>
+          </div>
+        </div>
+        <div className="login-right">
+          <h1 style={{fontSize:26,fontWeight:800,color:"#1E293B",marginBottom:4,letterSpacing:"-.01em"}}>Tekrar hoş geldin</h1>
+          <p style={{fontSize:14,color:"#64748B",marginBottom:28}}>Devam etmek için hesabınla giriş yap</p>
+          <button className="gbtn" onClick={doLogin}>
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/>
+              <path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/>
+            </svg>
+            Google ile Giriş Yap
+          </button>
+          {authErr && <div style={{fontSize:12,color:"var(--red)",background:"rgba(228,84,63,.08)",padding:"10px 14px",borderRadius:12,marginTop:14}}>{authErr}</div>}
+          <div style={{display:"flex",alignItems:"center",gap:10,margin:"24px 0 14px"}}>
+            <div style={{flex:1,height:1,background:"#E2E8F0"}}/>
+            <span style={{fontSize:12,color:"#94A3B8"}}>güvenli giriş</span>
+            <div style={{flex:1,height:1,background:"#E2E8F0"}}/>
+          </div>
+          <p style={{fontSize:12,color:"#94A3B8",textAlign:"center",lineHeight:1.6}}>
+            Kimlik doğrulaması Google tarafından yapılır.<br/>Şifreniz bu uygulamayla paylaşılmaz.
+          </p>
+        </div>
+      </div>
     </div>
   );
-  // ── Yükleniyor
+  // ── Yükleniyor (ilerleme çubuğu)
   if (user === undefined || !fData) return (
-    <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
-      <div className="spinner"/>
+    <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:18,background:"linear-gradient(135deg,#EFF6FF,#E0E7FF)"}}>
+      <div className="login-logo" style={{marginBottom:0}}>🧭</div>
+      <div className="loadbar"><div/></div>
+      <div style={{fontSize:12,fontWeight:600,color:"#64748B"}}>Gezi verilerin yükleniyor…</div>
       {authErr && <div style={{fontSize:12,color:"var(--red)",maxWidth:300,textAlign:"center"}}>{authErr}</div>}
     </div>
   );

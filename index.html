@@ -167,7 +167,7 @@ button{font-family:'Inter',sans-serif;}
   animation:tIn .35s var(--spring);}
 @keyframes tIn{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}
 .off-banner{background:var(--red);color:#fff;text-align:center;padding:8px 16px;font-size:12px;
-  font-weight:800;position:sticky;top:0;z-index:500;}
+  font-weight:800;position:relative;z-index:5;}
 .photo-grid{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
 .photo-thumb{width:64px;height:64px;border-radius:14px;object-fit:cover;border:2px solid var(--border);cursor:pointer;
   transition:transform var(--base) var(--ease);}
@@ -467,16 +467,30 @@ function PlaceImage({ name }) {
   const [src, setSrc] = React.useState(null);
   React.useEffect(() => {
     if (!name) return;
-    fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(name)}&prop=pageimages&format=json&pithumbsize=400&origin=*`)
+    let cancelled = false;
+    // Step 1: fuzzy search to find the best matching Wikipedia article title
+    fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name)}&srlimit=3&format=json&origin=*`)
       .then(r => r.json())
       .then(d => {
+        if (cancelled) return;
+        const results = d.query?.search || [];
+        if (!results.length) return;
+        // Pick first result title, then fetch its thumbnail
+        const title = results[0].title;
+        return fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
+      })
+      .then(r => r && r.json())
+      .then(d => {
+        if (cancelled || !d) return;
         const pages = Object.values(d.query?.pages || {});
         const thumb = pages[0]?.thumbnail?.source;
         if (thumb) setSrc(thumb);
-      }).catch(() => {});
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [name]);
   if (!src) return null;
-  return <img src={src} alt={name} style={{width:"100%",borderRadius:10,marginBottom:8,maxHeight:160,objectFit:"cover",display:"block"}}/>;
+  return <img src={src} alt={name} style={{width:"100%",borderRadius:10,marginBottom:8,maxHeight:180,objectFit:"cover",display:"block",boxShadow:"0 2px 8px rgba(0,0,0,.12)"}}/>;
 }
 
 function ModalHead({ title, onClose }) {
@@ -1943,7 +1957,7 @@ function App() {
 
       {/* ── FLOATING CTA ── */}
       {tab === "rota" && <button className="fab" onClick={() => setShowAddPl(true)}>＋ Mekan Ekle</button>}
-      {tab === "masraf" && <button className="fab" style={{background:"var(--grn)"}} onClick={() => {
+      {tab === "masraf" && <button className="fab" style={{background:"linear-gradient(150deg,#2563EB,#4F46E5)"}} onClick={() => {
         setNewExp(p => ({ ...p, paidBy: myUid, splitAmong: p.splitAmong.length ? p.splitAmong : memberList.map(x => x.uid) }));
         setShowAddExp(true);
       }}>＋ Masraf Ekle</button>}
@@ -2104,15 +2118,42 @@ function App() {
             setCity(id);
             setShowAddCity(false);
             setNewCity({ name:"", emoji:"📍" });
-            // Overpass tourist spots
+            // Overpass tourist spots — nodes + ways, broad tag coverage
             try {
-              const q = `[out:json][timeout:10];node["tourism"~"attraction|museum|artwork|gallery|viewpoint"](around:5000,${lat},${lon});out body 15;`;
+              const r = 6000, ll = `${lat},${lon}`;
+              // Query both nodes and ways; center coords for ways via "out center"
+              const q = `[out:json][timeout:15];(
+                node["tourism"~"^(attraction|viewpoint)$"](around:${r},${ll});
+                way["tourism"~"^(attraction|viewpoint)$"](around:${r},${ll});
+                node["historic"~"^(monument|castle|ruins|building|bridge|city_gate|memorial|archaeological_site|fort|palace|tower)$"](around:${r},${ll});
+                way["historic"~"^(monument|castle|ruins|building|bridge|city_gate|memorial|archaeological_site|fort|palace|tower)$"](around:${r},${ll});
+                node["natural"~"^(peak|cliff|waterfall|cave_entrance|beach|hot_spring)$"](around:${r},${ll});
+                node["tourism"="museum"](around:${r},${ll});
+                way["tourism"="museum"](around:${r},${ll});
+              );out center 40;`;
               const ov = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`).then(r => r.json());
-              const spots = (ov.elements || []).filter(e => e.tags?.name).slice(0, 12).map(e => ({
-                id: "place_" + e.id, name: e.tags.name, desc: e.tags.tourism || "", lat: e.lat, lon: e.lon, city: id, sortOrder: Date.now()
-              }));
+              const named = (ov.elements || []).filter(e => e.tags?.name);
+              // Deduplicate by name, prefer ways over nodes (ways have more detail)
+              const seen = new Map();
+              for (const e of named) {
+                const key = e.tags.name.toLowerCase();
+                if (!seen.has(key) || e.type === "way") seen.set(key, e);
+              }
+              const all = [...seen.values()].map(e => {
+                const elat = e.type === "way" ? e.center?.lat : e.lat;
+                const elon = e.type === "way" ? e.center?.lon : e.lon;
+                const t = e.tags;
+                const isMuseum = t.tourism === "museum" || t.amenity === "arts_centre";
+                const desc = t.historic || t.tourism || t.natural || "";
+                const url = elat && elon ? `https://www.google.com/maps/@${elat},${elon},17z?q=${encodeURIComponent(t.name)}` : `https://maps.google.com/?q=${encodeURIComponent(t.name)}`;
+                return { id:"place_"+e.id, name:t.name, desc, lat:elat, lon:elon, city:id, isMuseum, sortOrder:0, url };
+              });
+              // Up to 3 museums + up to 9 landmarks, ranked by name length (shorter = more famous)
+              const museums = all.filter(s => s.isMuseum).sort((a,b) => a.name.length - b.name.length).slice(0,3);
+              const landmarks = all.filter(s => !s.isMuseum).sort((a,b) => a.name.length - b.name.length).slice(0,9);
+              const spots = [...landmarks, ...museums].map((s,i) => ({ ...s, sortOrder:i, isMuseum:undefined }));
               if (spots.length > 0) setTouristSpots({ cityId: id, cityName, spots });
-            } catch {}
+            } catch(err) { console.warn("Overpass error", err); }
           }}>Ekle</button>
         </Modal>
       )}

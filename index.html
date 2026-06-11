@@ -11,16 +11,19 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/512/travel-ready.png">
 <title>Gezi Rotası</title>
-<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<!-- Fonts: non-blocking -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"></noscript>
+<!-- Critical: Firebase + React + Babel (must be synchronous) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+<!-- Leaflet + Chart.js: lazy-loaded on first use (not on initial page load) -->
 <style>
 /* Splash animation — before React mounts */
 @keyframes _loadSlide{0%{left:-40%}100%{left:100%}}
@@ -318,11 +321,35 @@ firebase.initializeApp(firebaseConfig);
    Kurallar: { "rules": { ".read": "auth != null", ".write": "auth != null" } }
    Google girişi file:// üzerinden çalışmaz; GitHub Pages / localhost gerekir. */
 window._db=firebase.database();
-// ?join=tripId parametresi: davet linki
 window._joinParam=(()=>{try{return new URL(location.href).searchParams.get('join');}catch{return null;}})();
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
+// Lazy loaders — load Leaflet/Chart.js only when first needed
+window._loadLeaflet = (() => {
+  let p = null;
+  return () => p || (p = new Promise(res => {
+    if (window.L) { res(); return; }
+    const lnk = document.createElement('link');
+    lnk.rel = 'stylesheet';
+    lnk.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(lnk);
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = res;
+    document.head.appendChild(s);
+  }));
+})();
+window._loadChart = (() => {
+  let p = null;
+  return () => p || (p = new Promise(res => {
+    if (window.Chart) { res(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+    s.onload = res;
+    document.head.appendChild(s);
+  }));
+})();
 </script>
 </head>
 <body>
@@ -528,6 +555,7 @@ function PieChart({ exps, currency, memberCount }) {
     f.forEach(e => { catMap[e.category] = (catMap[e.category] || 0) + (parseFloat(e.amount) || 0); });
     const active = EXP_CATS.filter(c => catMap[c.id] > 0.01);
     if (!active.length) return;
+    window._loadChart().then(() => {
     chart.current = new Chart(ref.current, {
       type: "doughnut",
       data: {
@@ -542,6 +570,7 @@ function PieChart({ exps, currency, memberCount }) {
         }
       }
     });
+    }); // _loadChart
     return () => chart.current?.destroy();
   }, [exps, currency]);
   const total = exps.filter(e => e.currency === currency && !e.isSettlement).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
@@ -557,7 +586,80 @@ function PieChart({ exps, currency, memberCount }) {
   );
 }
 
-// ── INTRO KART ANİMASYONU (giriş ekranı: dağınık → hiza → dönen çember) ─────
+// ── FAZ KARTI ANİMASYONU — scatter → line → circle (genel bileşen) ─────────
+// imgs       : string[]  — fotoğraf URL listesi
+// toCircle   : boolean   — true → line'dan sonra circle fazı da oynatılır
+// blurred    : boolean   — fotoğraflar bulanık gösterilir (gizemli önizleme)
+// center     : JSX       — circle fazında ortada görünen içerik
+// onLine     : fn()      — line fazına geçilince çağrılır
+function PhaseCards({ imgs, toCircle = true, blurred = false, center = null, onLine = null }) {
+  const N = imgs.length;
+  const ref = useRef(null);
+  const [phase, setPhase] = useState("scatter");
+  const [size, setSize] = useState({ w: 360, h: 360 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(es => {
+      const r = es[0].contentRect;
+      setSize({ w: r.width, h: r.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    const t1 = setTimeout(() => { setPhase("line"); onLine && onLine(); }, 500);
+    const t2 = toCircle ? setTimeout(() => setPhase("circle"), 2200) : null;
+    return () => { clearTimeout(t1); t2 && clearTimeout(t2); };
+  }, []);
+  const scatter = useMemo(() => imgs.map(() => ({
+    x: (Math.random() - .5) * 900,
+    y: (Math.random() - .5) * 700,
+    r: (Math.random() - .5) * 180,
+    s: .5, o: 0
+  })), []);
+  const targets = imgs.map((_, i) => {
+    if (phase === "scatter") return scatter[i];
+    if (phase === "line") {
+      const spacing = Math.min(52, (size.w - 70) / N);
+      return { x: i * spacing - (N - 1) * spacing / 2, y: 0, r: 0, s: 1, o: 1 };
+    }
+    const radius = Math.min(size.w, size.h) * 0.36;
+    const ang = (i / N) * 360;
+    const rad = ang * Math.PI / 180;
+    return { x: Math.cos(rad) * radius, y: Math.sin(rad) * radius, r: ang + 90, s: 1, o: 1 };
+  });
+  return (
+    <div ref={ref} className="intro-area">
+      <div className={phase === "circle" ? "intro-ring spin" : "intro-ring"}>
+        {imgs.map((src, i) => {
+          const t = targets[i];
+          return (
+            <div key={i} className="fcard" style={{
+              transform: `translate(${t.x}px,${t.y}px) rotate(${t.r}deg) scale(${t.s})`,
+              opacity: t.o,
+              transitionDelay: phase === "circle" ? `${i * 35}ms` : `${i * 22}ms`
+            }}>
+              <div className="fcard-inner">
+                <div className="fcard-front">
+                  <img src={src} alt="" loading="lazy"
+                    style={blurred ? { filter:"blur(7px) brightness(.85)", transform:"scale(1.15)" } : {}}/>
+                  {blurred && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",
+                    justifyContent:"center",fontSize:20,color:"rgba(255,255,255,.9)"}}>📍</div>}
+                </div>
+                <div className="fcard-back">{blurred ? "✈️" : "📍"}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {center && (
+        <div className={`intro-center${phase === "circle" ? " show" : ""}`}>{center}</div>
+      )}
+    </div>
+  );
+}
+
 const INTRO_IMGS = [
   "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=300&q=80",
   "https://images.unsplash.com/photo-1519677100203-a0e668c92439?w=300&q=80",
@@ -572,66 +674,83 @@ const INTRO_IMGS = [
   "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=300&q=80",
   "https://images.unsplash.com/photo-1496568816309-51d7c20e3b21?w=300&q=80"
 ];
+
+// Giriş ekranı — PhaseCards kullanır, toCircle=true
 function IntroCards() {
-  const N = INTRO_IMGS.length;
-  const ref = useRef(null);
-  const [phase, setPhase] = useState("scatter"); // scatter → line → circle
-  const [size, setSize] = useState({ w: 360, h: 360 });
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(es => {
-      const r = es[0].contentRect;
-      setSize({ w: r.width, h: r.height });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  useEffect(() => {
-    const t1 = setTimeout(() => setPhase("line"), 450);
-    const t2 = setTimeout(() => setPhase("circle"), 2100);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, []);
-  const scatter = useMemo(() => INTRO_IMGS.map(() => ({
-    x: (Math.random() - .5) * 900,
-    y: (Math.random() - .5) * 700,
-    r: (Math.random() - .5) * 180,
-    s: .5, o: 0
-  })), []);
-  const targets = INTRO_IMGS.map((_, i) => {
-    if (phase === "scatter") return scatter[i];
-    if (phase === "line") {
-      const spacing = Math.min(52, (size.w - 70) / N);
-      return { x: i * spacing - (N - 1) * spacing / 2, y: 0, r: 0, s: 1, o: 1 };
-    }
-    const radius = Math.min(size.w, size.h) * 0.36;
-    const ang = (i / N) * 360;
-    const rad = ang * Math.PI / 180;
-    return { x: Math.cos(rad) * radius, y: Math.sin(rad) * radius, r: ang + 90, s: 1, o: 1 };
-  });
   return (
-    <div ref={ref} className="intro-area">
-      <div className={phase === "circle" ? "intro-ring spin" : "intro-ring"}>
-        {INTRO_IMGS.map((src, i) => {
-          const t = targets[i];
-          return (
-            <div key={i} className="fcard" style={{
-              transform: `translate(${t.x}px,${t.y}px) rotate(${t.r}deg) scale(${t.s})`,
-              opacity: t.o,
-              transitionDelay: phase === "circle" ? `${i * 35}ms` : `${i * 22}ms`
-            }}>
-              <div className="fcard-inner">
-                <div className="fcard-front"><img src={src} alt="" loading="lazy"/></div>
-                <div className="fcard-back">📍</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className={`intro-center${phase === "circle" ? " show" : ""}`}>
+    <PhaseCards
+      imgs={INTRO_IMGS}
+      toCircle={true}
+      blurred={false}
+      center={<>
         <div style={{fontSize:34}}>🧭</div>
         <div className="login-title" style={{fontSize:24}}>Gezi Rotası</div>
         <div style={{fontSize:11,fontWeight:700,letterSpacing:".18em",color:"#94A3B8",marginTop:6}}>BİRLİKTE KEŞFEDİN</div>
+      </>}
+    />
+  );
+}
+
+// Boş rota ekranı — aynı animasyon, 7 kart, bulanık, sadece scatter→line
+const EMPTY_ROTA_IMGS = [
+  "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=300&q=80",
+  "https://images.unsplash.com/photo-1534430480872-3498386e7856?w=300&q=80",
+  "https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=300&q=80",
+  "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=300&q=80",
+  "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=300&q=80",
+  "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=300&q=80",
+  "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=300&q=80",
+];
+function EmptyRotaState({ onAdd }) {
+  const [showBtn, setShowBtn] = useState(false);
+  return (
+    // Outer: flex column, fills remaining screen under header+tabs
+    <div style={{
+      display:"flex", flexDirection:"column",
+      height:"calc(100dvh - 210px)", minHeight:320,
+      overflow:"hidden", background:"var(--bg)"
+    }}>
+      {/* Animasyon alanı — flex:1 so PhaseCards/intro-area expands correctly */}
+      <div style={{
+        flex:1, display:"flex", flexDirection:"column",
+        position:"relative", minHeight:0,
+        background:"linear-gradient(180deg,#F8FAFF 0%,#EEF2FF 100%)"
+      }}>
+        <PhaseCards
+          imgs={EMPTY_ROTA_IMGS}
+          toCircle={false}
+          blurred={true}
+          onLine={() => setShowBtn(true)}
+        />
+      </div>
+
+      {/* CTA — yukarı kayarak gelir */}
+      <div style={{
+        padding:"20px 24px calc(20px + env(safe-area-inset-bottom))",
+        textAlign:"center",
+        transform: showBtn ? "translateY(0)" : "translateY(32px)",
+        opacity: showBtn ? 1 : 0,
+        transition:"transform .65s var(--spring) .15s, opacity .55s ease .15s",
+        flexShrink:0
+      }}>
+        <div style={{
+          fontSize:21, fontWeight:900, marginBottom:6,
+          background:"linear-gradient(135deg,#4F46E5,#06B6D4)",
+          WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent"
+        }}>
+          İlk rotanı oluştur!
+        </div>
+        <div style={{fontSize:13, color:"var(--muted)", marginBottom:18, lineHeight:1.6}}>
+          Şehir ekle, mekanları planla,<br/>arkadaşlarınla birlikte keşfet.
+        </div>
+        <button className="tap" style={{
+          fontSize:16, fontWeight:700, padding:"13px 32px",
+          borderRadius:999, border:"none", cursor:"pointer", color:"#fff",
+          background:"linear-gradient(135deg,#4F46E5,#06B6D4)",
+          boxShadow:"0 6px 20px rgba(79,70,229,.38)"
+        }} onClick={onAdd}>
+          ＋ Şehir Ekle
+        </button>
       </div>
     </div>
   );
@@ -961,6 +1080,7 @@ function App() {
       const c = allCitiesNow.find(x => x.id === city);
       const el = document.getElementById("leafmap");
       if (!c || !el) return;
+      window._loadLeaflet().then(() => {
       const places = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
       if (mapCityRef.current !== activeTrip + city) {
         if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; polyRef.current = null; userMarkerRef.current = null; memberMarkersRef.current = []; routeMarkersRef.current = []; }
@@ -1012,6 +1132,7 @@ function App() {
           memberMarkersRef.current.push(mk);
         });
       }
+      }); // _loadLeaflet
     }, 80);
     return () => clearTimeout(timer);
   }, [city, tab, fData, routeIds, userLoc, activeTrip]);
@@ -1412,20 +1533,9 @@ function App() {
           <div className="tap ctab" style={{color:"var(--acc)",fontWeight:800}} onClick={() => setShowAddCity(true)}>+ ŞEHİR</div>
         </div>
 
-        {/* Şehir yoksa boş ekran */}
+        {/* Şehir yoksa animasyonlu boş ekran */}
         {allCities.length === 0 && (
-          <div style={{textAlign:"center",padding:"60px 24px 40px"}}>
-            <div style={{fontSize:64,marginBottom:16}}>🗺️</div>
-            <div style={{fontSize:22,fontWeight:900,background:"linear-gradient(135deg,#4F46E5,#06B6D4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginBottom:10}}>
-              İlk rotanı oluştur!
-            </div>
-            <div style={{fontSize:14,color:"var(--muted)",marginBottom:28,lineHeight:1.6}}>
-              Ziyaret etmek istediğin şehri ekle,<br/>mekanları planla, rotanı çiz.
-            </div>
-            <button className="btn-pri tap" style={{fontSize:16,padding:"14px 28px"}} onClick={() => setShowAddCity(true)}>
-              ＋ Şehir Ekle
-            </button>
-          </div>
+          <EmptyRotaState onAdd={() => setShowAddCity(true)}/>
         )}
 
         {/* Hava */}

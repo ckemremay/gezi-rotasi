@@ -98,7 +98,7 @@ button{font-family:'Inter',sans-serif;}
 .fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#E2A93B,#F4C861);transition:width .6s var(--ease);}
 /* Sehir chipleri */
 .tabs{display:flex;background:var(--bg);overflow-x:auto;padding:14px 18px 4px;gap:8px;
-  position:sticky;top:0;z-index:100;white-space:nowrap;}
+  position:sticky;top:env(safe-area-inset-top,0px);z-index:100;white-space:nowrap;}
 .ctab{flex-shrink:0;display:flex;align-items:center;gap:6px;padding:10px 16px;border-radius:var(--r-full);
   background:var(--surface);border:1.5px solid var(--border);font-size:13px;font-weight:600;color:var(--ink-2);
   cursor:pointer;transition:all var(--base) var(--ease);box-shadow:var(--e1);}
@@ -325,12 +325,9 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ── STATİK VERİ ───────────────────────────────────────────────────────────────
-const DEFAULT_CITIES = [
-  { id: "bremen",  name: "Bremen",  emoji: "🏰", lat: 53.0793, lon: 8.8017,  currency: "EUR" },
-  { id: "hamburg", name: "Hamburg", emoji: "⚓", lat: 53.5507, lon: 9.9930,  currency: "EUR" },
-  { id: "odense",  name: "Odense",  emoji: "🚲", lat: 55.4038, lon: 10.4024, currency: "DKK" }
-];
-const STATIC_PLACES = {
+const DEFAULT_CITIES = [];   // Tüm şehirler kullanıcı tarafından eklenir
+const STATIC_PLACES = {};    // Önceden tanımlı mekan yok
+const _OLD_STATIC_PLACES = {
   bremen: [
     { id:"b1", name:"🎡 Mühle am Wall", desc:"Bremen'in en ikonik yel değirmeni.", lat:53.0805, lon:8.8048, isStatic:true, url:"https://maps.app.goo.gl/wESmemF8PgUnNgJ18" },
     { id:"b2", name:"🏛️ Bremen Marktplatz", desc:"UNESCO Dünya Mirası, şehrin kalbi.", lat:53.0758, lon:8.8073, isStatic:true, url:"https://maps.app.goo.gl/afdHmMozHGTKSZ3p7" },
@@ -464,6 +461,22 @@ function Modal({ onClose, children }) {
       <div className="modal" onClick={e => e.stopPropagation()}>{children}</div>
     </div>
   );
+}
+
+function PlaceImage({ name }) {
+  const [src, setSrc] = React.useState(null);
+  React.useEffect(() => {
+    if (!name) return;
+    fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(name)}&prop=pageimages&format=json&pithumbsize=400&origin=*`)
+      .then(r => r.json())
+      .then(d => {
+        const pages = Object.values(d.query?.pages || {});
+        const thumb = pages[0]?.thumbnail?.source;
+        if (thumb) setSrc(thumb);
+      }).catch(() => {});
+  }, [name]);
+  if (!src) return null;
+  return <img src={src} alt={name} style={{width:"100%",borderRadius:10,marginBottom:8,maxHeight:160,objectFit:"cover",display:"block"}}/>;
 }
 
 function ModalHead({ title, onClose }) {
@@ -631,7 +644,7 @@ function App() {
   const [tab, setTab] = useState("rota");
   const [planSub, setPlanSub] = useState("gun");
   const [masrafSub, setMasrafSub] = useState("harcama");
-  const [city, setCity] = useState("bremen");
+  const [city, setCity] = useState(null);
   const [dayFilter, setDayFilter] = useState(0);
   // Dış veriler
   const [wxData, setWxData] = useState(null);
@@ -650,10 +663,11 @@ function App() {
   const [newPl, setNewPl] = useState(initPl);
   const [newExp, setNewExp] = useState(initExp);
   const [newCity, setNewCity] = useState({ name:"", emoji:"📍" });
+  const [touristSpots, setTouristSpots] = useState(null); // { cityId, spots:[] } — ask to add
   const [newPoll, setNewPoll] = useState(initPoll);
   const [newPack, setNewPack] = useState("");
   const [newNote, setNewNote] = useState("");
-  const [newTrip, setNewTrip] = useState({ name:"", emoji:"✈️" });
+  const [newTrip, setNewTrip] = useState({ name:"", emoji:"✈️", startDate:"", endDate:"" });
   const [budgetForm, setBudgetForm] = useState({ amount:"", currency:"EUR" });
   // Rota / konum
   const [routeMode, setRouteMode] = useState(false);
@@ -666,6 +680,7 @@ function App() {
   // Ref'ler
   const mapRef = useRef(null), polyRef = useRef(null), userMarkerRef = useRef(null);
   const memberMarkersRef = useRef([]);
+  const routeMarkersRef = useRef([]);
   const mapCityRef = useRef(null), firstLoad = useRef(true), seenIds = useRef(new Set()), seenTrips = useRef(new Set());
   const fileInputRef = useRef({}), receiptInputRef = useRef(null);
 
@@ -759,7 +774,11 @@ function App() {
     if (!user || !activeTrip) { setFData(null); return; }
     setFData(null);
     const rd = window._db.ref(`trips/${activeTrip}`);
-    rd.on("value", s => setFData(s.val() || {}),
+    rd.on("value", s => {
+      const d = s.val() || {};
+      setFData(d);
+      setCity(c => c || Object.keys(d.cities || {})[0] || null);
+    },
       err => { console.error(err); setAuthErr("Veriye erişim reddedildi. Gezi kurallarını kontrol edin."); });
     return () => rd.off();
   }, [user, activeTrip]);
@@ -784,12 +803,12 @@ function App() {
   const switchTrip = id => {
     setActiveTrip(id);
     localStorage.setItem("gezi_trip", id);
-    setCity("bremen"); setRouteIds([]); setNearbyMode(false); setDayFilter(0);
+    setCity(null); setRouteIds([]); setNearbyMode(false); setDayFilter(0);
     firstLoad.current = true;
   };
-  const createTrip = (name, emoji) => {
+  const createTrip = (name, emoji, startDate, endDate) => {
     const id = "trip_" + newId();
-    const meta = { id, name, emoji: emoji || "✈️", ownerUid: myUid, createdAt: Date.now() };
+    const meta = { id, name, emoji: emoji || "✈️", ownerUid: myUid, createdAt: Date.now(), ...(startDate && { startDate }), ...(endDate && { endDate }) };
     const memberEntry = { uid: myUid, name: userProfile?.name || "?", email: user?.email || "", role: "owner", joinedAt: Date.now() };
     const userTripEntry = { ...meta, role: "owner" };
     const updates = {};
@@ -825,6 +844,16 @@ function App() {
     await window._db.ref().update(updates);
     if (activeTrip === tripId) { setActiveTrip(null); localStorage.removeItem("gezi_trip"); }
     toast("Geziden ayrıldın.", "👋");
+  };
+  const deleteTrip = async (tripId) => {
+    // Remove trip data + all member index entries
+    const snap = await window._db.ref(`trips/${tripId}/members`).once("value");
+    const updates = {};
+    updates[`trips/${tripId}`] = null;
+    Object.keys(snap.val() || {}).forEach(uid => { updates[`users/${uid}/trips/${tripId}`] = null; });
+    await window._db.ref().update(updates);
+    if (activeTrip === tripId) { setActiveTrip(null); localStorage.removeItem("gezi_trip"); }
+    toast("Gezi silindi.", "🗑️");
   };
   const getInviteLink = () => {
     try {
@@ -889,7 +918,7 @@ function App() {
       if (!c || !el) return;
       const places = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
       if (mapCityRef.current !== activeTrip + city) {
-        if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; polyRef.current = null; userMarkerRef.current = null; memberMarkersRef.current = []; }
+        if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; polyRef.current = null; userMarkerRef.current = null; memberMarkersRef.current = []; routeMarkersRef.current = []; }
         const m = L.map(el).setView([c.lat, c.lon], 14);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM" }).addTo(m);
         places.forEach(p => {
@@ -900,12 +929,23 @@ function App() {
         mapRef.current = m;
         mapCityRef.current = activeTrip + city;
       }
-      // Rota çizgisi
+      // Rota çizgisi + numaralı işaretçiler
       if (polyRef.current) { mapRef.current?.removeLayer(polyRef.current); polyRef.current = null; }
+      routeMarkersRef.current.forEach(mk => mapRef.current?.removeLayer(mk));
+      routeMarkersRef.current = [];
       if (routeIds.length >= 2 && mapRef.current) {
-        const latlngs = routeIds.map(id => places.find(p => p.id === id)).filter(p => p && p.lat).map(p => [p.lat, p.lon]);
+        const routePts = routeIds.map(id => places.find(p => p.id === id)).filter(p => p && p.lat);
+        const latlngs = routePts.map(p => [p.lat, p.lon]);
         if (latlngs.length >= 2) {
           polyRef.current = L.polyline(latlngs, { color:"#4F46E5", weight:4, dashArray:"10,6", opacity:.85 }).addTo(mapRef.current);
+          routePts.forEach((p, i) => {
+            const mk = L.marker([p.lat, p.lon], { icon: L.divIcon({
+              className: "",
+              html: `<div style="background:#4F46E5;color:#fff;width:26px;height:26px;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i+1}</div>`,
+              iconSize:[26,26], iconAnchor:[13,13]
+            })}).addTo(mapRef.current).bindPopup(`<b>${esc(p.name)}</b>`);
+            routeMarkersRef.current.push(mk);
+          });
           mapRef.current.fitBounds(L.latLngBounds(latlngs), { padding:[30,30] });
         }
       }
@@ -976,12 +1016,13 @@ function App() {
   const routeStats = useMemo(() => {
     if (!fData || routeIds.length < 2) return null;
     const allP = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
+    const ordered = routeIds.map(id => allP.find(p => p.id === id)).filter(Boolean);
     let total = 0;
-    for (let i = 0; i < routeIds.length - 1; i++) {
-      const a = allP.find(p => p.id === routeIds[i]), b = allP.find(p => p.id === routeIds[i+1]);
-      if (a && b && a.lat && b.lat) total += haversine(a.lat, a.lon, b.lat, b.lon);
+    for (let i = 0; i < ordered.length - 1; i++) {
+      const a = ordered[i], b = ordered[i+1];
+      if (a.lat && b.lat) total += haversine(a.lat, a.lon, b.lat, b.lon);
     }
-    return { dist: total, min: walkMin(total), stops: routeIds.length };
+    return { dist: total, min: walkMin(total), stops: routeIds.length, places: ordered };
   }, [routeIds, city, fData, activeTrip]);
   const convResult = useMemo(() => {
     const amt = parseFloat(convAmt) || 0;
@@ -1119,6 +1160,9 @@ function App() {
     );
   }
 
+  // tripList burada tanımlanıyor (gezi listesi ekranından önce)
+  const tripList = (myTrips || []).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
   // ── Gezi listesi ekranı (aktif gezi seçilmemişse)
   if (!activeTrip) {
     return (
@@ -1151,7 +1195,7 @@ function App() {
                   <div style={{width:48,height:48,borderRadius:14,background:"var(--acc-soft)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{t.emoji || "✈️"}</div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:800,fontSize:15,color:"#1E293B"}}>{t.name}</div>
-                    <div style={{fontSize:11,color:"#94A3B8",marginTop:2}}>{t.role === "owner" ? "👑 Sahibi" : "👤 Üye"} · {fmtTime(t.createdAt)}</div>
+                    <div style={{fontSize:11,color:"#94A3B8",marginTop:2}}>{t.role === "owner" ? "👑 Sahibi" : "👤 Üye"} · {t.startDate && t.endDate ? `${t.startDate} – ${t.endDate}` : fmtTime(t.createdAt)}</div>
                   </div>
                   <div style={{color:"#CBD5E1",fontSize:20}}>›</div>
                 </div>
@@ -1175,13 +1219,23 @@ function App() {
                 <div style={{fontWeight:800,fontSize:15,marginBottom:14,color:"#1E293B"}}>✈️ Yeni Gezi</div>
                 <input placeholder="Gezi adı (örn: Roma 2027)" value={newTrip.name} style={{marginBottom:10}}
                   onChange={e => setNewTrip({ ...newTrip, name: e.target.value })}/>
-                <input value={newTrip.emoji} maxLength={4} placeholder="Emoji" style={{marginBottom:14,width:80}}
+                <input value={newTrip.emoji} maxLength={4} placeholder="Emoji" style={{marginBottom:10,width:80}}
                   onChange={e => setNewTrip({ ...newTrip, emoji: e.target.value })}/>
+                <div style={{display:"flex",gap:8,marginBottom:14}}>
+                  <div style={{flex:1}}>
+                    <label className="lbl" style={{fontSize:11}}>Başlangıç</label>
+                    <input type="date" value={newTrip.startDate} onChange={e => setNewTrip({ ...newTrip, startDate: e.target.value })}/>
+                  </div>
+                  <div style={{flex:1}}>
+                    <label className="lbl" style={{fontSize:11}}>Bitiş</label>
+                    <input type="date" value={newTrip.endDate} onChange={e => setNewTrip({ ...newTrip, endDate: e.target.value })}/>
+                  </div>
+                </div>
                 <div style={{display:"flex",gap:10}}>
                   <button className="btn-pri tap" style={{flex:1}} onClick={() => {
                     if (!newTrip.name.trim()) { toast("Gezi adı gerekli.", "⚠️"); return; }
-                    createTrip(newTrip.name.trim(), newTrip.emoji || "✈️");
-                    setShowAddTrip(false); setNewTrip({ name:"", emoji:"✈️" });
+                    createTrip(newTrip.name.trim(), newTrip.emoji || "✈️", newTrip.startDate, newTrip.endDate);
+                    setShowAddTrip(false); setNewTrip({ name:"", emoji:"✈️", startDate:"", endDate:"" });
                   }}>Oluştur</button>
                   <button className="btn-out tap" onClick={() => setShowAddTrip(false)}>İptal</button>
                 </div>
@@ -1214,7 +1268,6 @@ function App() {
   const myMember = myUid ? (members[myUid] || { uid: myUid, name: userProfile?.name || "?" }) : null;
 
   // ── Türetilmiş gezi verileri
-  const tripList = (myTrips || []).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   const activeTripMeta = fData?.meta || {};
   const activeTripName = activeTripMeta.name || "Gezi";
   const visited = TD.visited || {};
@@ -1261,12 +1314,11 @@ function App() {
     tab === "rota" ? `${activeCityObj?.emoji || ""} ${activeCityObj?.name || ""}` :
     tab === "plan" ? "📅 Plan" :
     tab === "masraf" ? "💰 Masraf" :
-    tab === "anket" ? "🗳️ Anketler" : "⚙️ Daha";
+    tab === "anket" ? "🗳️ Anketler" : "🛠️ Araçlar";
 
   return (
     <div style={{maxWidth:520,margin:"0 auto",background:"var(--bg)",minHeight:"100vh",paddingBottom:130}}>
       <Toast toasts={toasts}/>
-      {!isOnline && <div className="off-banner">📵 Çevrimdışı — İnternet gelince otomatik senkronize olur</div>}
 
       {/* ── HERO HEADER ── */}
       <div className="header">
@@ -1299,6 +1351,8 @@ function App() {
         )}
       </div>
 
+      {!isOnline && <div className="off-banner">📵 Çevrimdışı — İnternet gelince otomatik senkronize olur</div>}
+
       {/* ════ ROTA ════ */}
       {tab === "rota" && <>
         <div className="tabs">
@@ -1307,11 +1361,27 @@ function App() {
               onClick={() => { setCity(c.id); setRouteIds([]); setNearbyMode(false); }}>
               {c.emoji} {c.name}
               {!!customCities[c.id] && <span className="tap" style={{fontSize:11,marginLeft:2,opacity:.8}}
-                onClick={e => { e.stopPropagation(); if (window.confirm(`"${c.name}" silinsin mi?`)) { wr(`cities/${c.id}`, null); if (city === c.id) setCity("bremen"); } }}>✕</span>}
+                onClick={e => { e.stopPropagation(); if (window.confirm(`"${c.name}" silinsin mi?`)) { wr(`cities/${c.id}`, null); if (city === c.id) { const rem = allCities.filter(x => x.id !== c.id); setCity(rem[0]?.id || null); } } }}>✕</span>}
             </div>
           ))}
           <div className="tap ctab" style={{color:"var(--acc)",fontWeight:800}} onClick={() => setShowAddCity(true)}>+ ŞEHİR</div>
         </div>
+
+        {/* Şehir yoksa boş ekran */}
+        {allCities.length === 0 && (
+          <div style={{textAlign:"center",padding:"60px 24px 40px"}}>
+            <div style={{fontSize:64,marginBottom:16}}>🗺️</div>
+            <div style={{fontSize:22,fontWeight:900,background:"linear-gradient(135deg,#4F46E5,#06B6D4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginBottom:10}}>
+              İlk rotanı oluştur!
+            </div>
+            <div style={{fontSize:14,color:"var(--muted)",marginBottom:28,lineHeight:1.6}}>
+              Ziyaret etmek istediğin şehri ekle,<br/>mekanları planla, rotanı çiz.
+            </div>
+            <button className="btn-pri tap" style={{fontSize:16,padding:"14px 28px"}} onClick={() => setShowAddCity(true)}>
+              ＋ Şehir Ekle
+            </button>
+          </div>
+        )}
 
         {/* Hava */}
         <div className="card" style={{margin:"14px 18px",padding:"12px 16px"}}>
@@ -1363,14 +1433,23 @@ function App() {
 
         {/* Rota istatistiği */}
         {routeMode && routeStats && (
-          <div style={{margin:"0 18px 12px",background:"var(--pri)",color:"#fff",padding:"12px 16px",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{margin:"0 18px 12px",background:"var(--pri)",color:"#fff",padding:"12px 16px",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}
+            onClick={() => {
+              const pts = (routeStats.places || []).filter(p => p.lat && p.lon);
+              if (pts.length < 2) return;
+              const origin = `${pts[0].lat},${pts[0].lon}`;
+              const dest = `${pts[pts.length-1].lat},${pts[pts.length-1].lon}`;
+              const mid = pts.slice(1,-1).map(p => `${p.lat},${p.lon}`).join("|");
+              const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${mid ? "&waypoints="+encodeURIComponent(mid) : ""}&travelmode=walking`;
+              window.open(url, "_blank");
+            }}>
             <div>
               <div style={{fontSize:12,opacity:.7}}>Seçilen rota</div>
               <div style={{fontSize:15,fontWeight:800}}>{routeStats.stops} durak · {fmtDist(routeStats.dist)}</div>
             </div>
             <div style={{textAlign:"right"}}>
-              <div style={{fontSize:12,opacity:.7}}>Yürüme süresi</div>
-              <div style={{fontSize:15,fontWeight:800}}>~{routeStats.min} dk</div>
+              <div style={{fontSize:12,opacity:.7}}>Yürüme süresi · tıkla</div>
+              <div style={{fontSize:15,fontWeight:800}}>~{routeStats.min} dk 🗺️</div>
             </div>
           </div>
         )}
@@ -1395,7 +1474,8 @@ function App() {
                       {isInRoute && <div className="route-badge">{routeIdx + 1}</div>}
                       {day > 0 && <span className="badge">📅 {day}. gün</span>}
                     </div>
-                    <div style={{fontSize:12,color:"var(--muted)",lineHeight:1.4,marginBottom:10}}>{p.desc}</div>
+                    <div style={{fontSize:12,color:"var(--muted)",lineHeight:1.4,marginBottom:6}}>{p.desc}</div>
+                    <PlaceImage name={p.name}/>
                     <div className="photo-grid">
                       {photos.slice(0, 3).map(ph => (
                         <div key={ph.id} style={{position:"relative",display:"inline-block"}}>
@@ -1630,11 +1710,6 @@ function App() {
             </div>
           ))}
 
-          <button className="btn-pri tap" onClick={() => {
-            setNewExp(p => ({ ...p, paidBy: myUid, splitAmong: p.splitAmong.length ? p.splitAmong : memberList.map(x => x.uid) }));
-            setShowAddExp(true);
-          }}>+ Yeni Masraf Ekle</button>
-
           {/* Geçmiş */}
           <div style={{marginTop:18}}>
             <div className="sec-title">İşlem Geçmişi</div>
@@ -1766,7 +1841,7 @@ function App() {
         </div>
       )}
 
-      {/* ════ DAHA ════ */}
+      {/* ════ ARAÇLAR ════ */}
       {tab === "daha" && (
         <div style={{padding:18}}>
           {/* Profil */}
@@ -1792,10 +1867,15 @@ function App() {
                 <span style={{fontSize:20}}>{t.emoji || "✈️"}</span>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:700,fontSize:14}}>{t.name}</div>
-                  <div style={{fontSize:10,color:"var(--muted)"}}>{t.role === "owner" ? "👑 Sahibi" : "👤 Üye"} · {fmtTime(t.createdAt)}</div>
+                  <div style={{fontSize:10,color:"var(--muted)"}}>{t.role === "owner" ? "👑 Sahibi" : "👤 Üye"} · {t.startDate && t.endDate ? `${t.startDate} – ${t.endDate}` : fmtTime(t.createdAt)}</div>
                 </div>
                 {activeTrip === t.id && <span className="badge">Aktif</span>}
-                {t.role !== "owner" && (
+                {t.role === "owner" ? (
+                  <div className="tap" style={{fontSize:11,fontWeight:700,color:"var(--red)",padding:"4px 8px"}}
+                    onClick={e => { e.stopPropagation(); if(confirm("Bu geziyi kalıcı olarak silmek istiyor musun? Tüm veriler silinir.")) deleteTrip(t.id); }}>
+                    Sil
+                  </div>
+                ) : (
                   <div className="tap" style={{fontSize:11,fontWeight:700,color:"var(--red)",padding:"4px 8px"}}
                     onClick={e => { e.stopPropagation(); if(confirm("Bu geziden ayrılmak istiyor musun?")) leaveTrip(t.id); }}>
                     Ayrıl
@@ -1863,10 +1943,14 @@ function App() {
 
       {/* ── FLOATING CTA ── */}
       {tab === "rota" && <button className="fab" onClick={() => setShowAddPl(true)}>＋ Mekan Ekle</button>}
+      {tab === "masraf" && <button className="fab" style={{background:"var(--grn)"}} onClick={() => {
+        setNewExp(p => ({ ...p, paidBy: myUid, splitAmong: p.splitAmong.length ? p.splitAmong : memberList.map(x => x.uid) }));
+        setShowAddExp(true);
+      }}>＋ Masraf Ekle</button>}
 
       {/* ── ALT NAVİGASYON ── */}
       <div className="nav-bar">
-        {[["rota","🗺️","ROTA"],["plan","📅","PLAN"],["masraf","💳","MASRAF"],["anket","🗳️","ANKET"],["daha","⚙️","DAHA"]].map(([k, ic, lb]) => (
+        {[["rota","🗺️","ROTA"],["plan","📅","PLAN"],["masraf","💳","MASRAF"],["anket","🗳️","ANKET"],["daha","🛠️","ARAÇLAR"]].map(([k, ic, lb]) => (
           <div key={k} className={`nav-item tap${tab === k ? " on" : ""}`} onClick={() => setTab(k)}>
             <div className="ic">{ic}</div><div>{lb}</div>
           </div>
@@ -2006,14 +2090,56 @@ function App() {
           <label className="lbl">Emoji</label>
           <input value={newCity.emoji} maxLength={4} style={{marginBottom:20,width:90}}
             onChange={e => setNewCity({ ...newCity, emoji: e.target.value })}/>
-          <button className="btn-pri tap" onClick={() => {
+          <button className="btn-pri tap" onClick={async () => {
             if (!newCity.name.trim()) { toast("Şehir adı gerekli.", "⚠️"); return; }
             const id = "city_" + newId();
-            wr(`cities/${id}`, { ...newCity, name: newCity.name.trim(), id, lat:51, lon:10, currency:"EUR" });
+            const cityName = newCity.name.trim();
+            // Nominatim geocode
+            let lat = 51, lon = 10;
+            try {
+              const geo = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityName)}&format=json&limit=1`).then(r => r.json());
+              if (geo[0]) { lat = parseFloat(geo[0].lat); lon = parseFloat(geo[0].lon); }
+            } catch {}
+            wr(`cities/${id}`, { ...newCity, name: cityName, id, lat, lon, currency:"EUR" });
             setCity(id);
             setShowAddCity(false);
             setNewCity({ name:"", emoji:"📍" });
+            // Overpass tourist spots
+            try {
+              const q = `[out:json][timeout:10];node["tourism"~"attraction|museum|artwork|gallery|viewpoint"](around:5000,${lat},${lon});out body 15;`;
+              const ov = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`).then(r => r.json());
+              const spots = (ov.elements || []).filter(e => e.tags?.name).slice(0, 12).map(e => ({
+                id: "place_" + e.id, name: e.tags.name, desc: e.tags.tourism || "", lat: e.lat, lon: e.lon, city: id, sortOrder: Date.now()
+              }));
+              if (spots.length > 0) setTouristSpots({ cityId: id, cityName, spots });
+            } catch {}
           }}>Ekle</button>
+        </Modal>
+      )}
+
+      {touristSpots && (
+        <Modal onClose={() => setTouristSpots(null)}>
+          <ModalHead title={`🏛️ Turistik Noktalar`} onClose={() => setTouristSpots(null)}/>
+          <div style={{fontSize:14,color:"var(--muted)",marginBottom:14}}>
+            <b>{touristSpots.cityName}</b> için {touristSpots.spots.length} popüler yer bulundu. Hepsini ekleyeyim mi?
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:18,maxHeight:260,overflowY:"auto"}}>
+            {touristSpots.spots.map(s => (
+              <div key={s.id} style={{background:"var(--bg2)",borderRadius:10,padding:"8px 12px",fontSize:13}}>
+                <b>{s.name}</b>{s.desc ? ` · ${s.desc}` : ""}
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button className="btn-pri tap" style={{flex:1}} onClick={() => {
+              const updates = {};
+              touristSpots.spots.forEach((s, i) => { updates[`customPlaces/${s.id}`] = { ...s, sortOrder: i }; });
+              window._db.ref(`trips/${activeTrip}`).update(updates);
+              toast(`${touristSpots.spots.length} mekan eklendi!`, "🏛️");
+              setTouristSpots(null);
+            }}>Hepsini Ekle</button>
+            <button className="btn-out tap" style={{flex:1}} onClick={() => setTouristSpots(null)}>Geç</button>
+          </div>
         </Modal>
       )}
 
@@ -2024,13 +2150,24 @@ function App() {
           <input placeholder="Örn: Roma 2027" value={newTrip.name} style={{marginBottom:12}}
             onChange={e => setNewTrip({ ...newTrip, name: e.target.value })}/>
           <label className="lbl">Emoji</label>
-          <input value={newTrip.emoji} maxLength={4} style={{marginBottom:20,width:90}}
+          <input value={newTrip.emoji} maxLength={4} style={{marginBottom:10,width:90}}
             onChange={e => setNewTrip({ ...newTrip, emoji: e.target.value })}/>
+          <label className="lbl">Tarih Aralığı</label>
+          <div style={{display:"flex",gap:8,marginBottom:20}}>
+            <div style={{flex:1}}>
+              <label className="lbl" style={{fontSize:11}}>Başlangıç</label>
+              <input type="date" value={newTrip.startDate} onChange={e => setNewTrip({ ...newTrip, startDate: e.target.value })}/>
+            </div>
+            <div style={{flex:1}}>
+              <label className="lbl" style={{fontSize:11}}>Bitiş</label>
+              <input type="date" value={newTrip.endDate} onChange={e => setNewTrip({ ...newTrip, endDate: e.target.value })}/>
+            </div>
+          </div>
           <button className="btn-pri tap" onClick={() => {
             if (!newTrip.name.trim()) { toast("Gezi adı gerekli.", "⚠️"); return; }
-            createTrip(newTrip.name.trim(), newTrip.emoji || "✈️");
+            createTrip(newTrip.name.trim(), newTrip.emoji || "✈️", newTrip.startDate, newTrip.endDate);
             setShowAddTrip(false);
-            setNewTrip({ name:"", emoji:"✈️" });
+            setNewTrip({ name:"", emoji:"✈️", startDate:"", endDate:"" });
           }}>Oluştur ve Geç</button>
         </Modal>
       )}

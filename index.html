@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1C3A2A">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Gezi Rotası">
@@ -20,6 +21,11 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+<style>
+/* Splash animation — before React mounts */
+@keyframes _loadSlide{0%{left:-40%}100%{left:100%}}
+#static-splash [data-anim]{animation:_loadSlide 1.1s ease-in-out infinite;}
+</style>
 <style>
 /* ════ 2026 DESIGN TOKENS ════ */
 :root{
@@ -320,7 +326,16 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
 </script>
 </head>
 <body>
-<div id="root"></div>
+<div id="root">
+  <!-- Static splash — React bunu mount olunca siler -->
+  <div id="static-splash" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:linear-gradient(135deg,#EFF6FF,#E0E7FF);">
+    <div style="font-size:52px">🧭</div>
+    <div style="width:min(260px,70vw);height:6px;border-radius:3px;background:#E2E8F0;overflow:hidden;position:relative;">
+      <div data-anim="1" style="position:absolute;top:0;bottom:0;width:40%;border-radius:3px;background:linear-gradient(90deg,#3B82F6,#4F46E5);"></div>
+    </div>
+    <div style="font-size:12px;font-weight:600;color:#64748B">Yükleniyor…</div>
+  </div>
+</div>
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -677,7 +692,8 @@ function App() {
   const [newPl, setNewPl] = useState(initPl);
   const [newExp, setNewExp] = useState(initExp);
   const [newCity, setNewCity] = useState({ name:"", emoji:"📍" });
-  const [touristSpots, setTouristSpots] = useState(null); // { cityId, spots:[] } — ask to add
+  const [touristSpots, setTouristSpots] = useState(null); // { cityId, spots:[], selected:Set }
+  const [touristSel, setTouristSel] = useState(new Set());
   const [newPoll, setNewPoll] = useState(initPoll);
   const [newPack, setNewPack] = useState("");
   const [newNote, setNewNote] = useState("");
@@ -793,7 +809,17 @@ function App() {
       setFData(d);
       setCity(c => c || Object.keys(d.cities || {})[0] || null);
     },
-      err => { console.error(err); setAuthErr("Veriye erişim reddedildi. Gezi kurallarını kontrol edin."); });
+      err => {
+        console.error(err);
+        if (err.code === "PERMISSION_DENIED") {
+          // Stale trip in localStorage — clear it and return to trip list
+          setActiveTrip(null);
+          localStorage.removeItem("gezi_trip");
+          toast("Bu geziye erişim izniniz yok veya gezi silinmiş.", "🔒");
+        } else {
+          setAuthErr("Veri okunamadı: " + err.message);
+        }
+      });
     return () => rd.off();
   }, [user, activeTrip]);
 
@@ -860,14 +886,18 @@ function App() {
     toast("Geziden ayrıldın.", "👋");
   };
   const deleteTrip = async (tripId) => {
-    // Remove trip data + all member index entries
-    const snap = await window._db.ref(`trips/${tripId}/members`).once("value");
-    const updates = {};
-    updates[`trips/${tripId}`] = null;
-    Object.keys(snap.val() || {}).forEach(uid => { updates[`users/${uid}/trips/${tripId}`] = null; });
-    await window._db.ref().update(updates);
-    if (activeTrip === tripId) { setActiveTrip(null); localStorage.removeItem("gezi_trip"); }
-    toast("Gezi silindi.", "🗑️");
+    try {
+      // Only write to paths this user has permission for:
+      // - trips/${tripId}: owner can delete the whole trip
+      // - users/${myUid}/trips/${tripId}: own index entry
+      // Other members' index entries are orphaned but cleaned up on their next access
+      const updates = {};
+      updates[`trips/${tripId}`] = null;
+      updates[`users/${myUid}/trips/${tripId}`] = null;
+      await window._db.ref().update(updates);
+      if (activeTrip === tripId) { setActiveTrip(null); localStorage.removeItem("gezi_trip"); }
+      toast("Gezi silindi.", "🗑️");
+    } catch(e) { toast("Gezi silinemedi: " + e.message, "❌"); }
   };
   const getInviteLink = () => {
     try {
@@ -911,17 +941,18 @@ function App() {
 
   // ── Hava + kur
   const allCitiesNow = fData ? [...DEFAULT_CITIES, ...Object.values(TD.cities || {})] : DEFAULT_CITIES;
+  const _activeCityForWx = allCitiesNow.find(x => x.id === city);
+  const _wxKey = _activeCityForWx ? `${_activeCityForWx.lat},${_activeCityForWx.lon}` : null;
   useEffect(() => {
-    if (!fData) return;
-    const c = allCitiesNow.find(x => x.id === city);
-    if (!c || !c.lat) return;
+    if (!_wxKey) return;
+    const [lat, lon] = _wxKey.split(",");
     setWxData(null);
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`)
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`)
       .then(r => r.json()).then(d => setWxData(d)).catch(() => {});
     fetch("https://open.er-api.com/v6/latest/EUR").then(r => r.json()).then(d => {
       if (d.rates) setRates({ EUR:1, TRY:d.rates.TRY || 38.5, USD:d.rates.USD || 1.08, DKK:d.rates.DKK || 7.46 });
     }).catch(() => {});
-  }, [city, activeTrip, fData && TD.cities]);
+  }, [_wxKey, activeTrip]);
 
   // ── Harita
   useEffect(() => {
@@ -2149,38 +2180,78 @@ function App() {
                 return { id:"place_"+e.id, name:t.name, desc, lat:elat, lon:elon, city:id, isMuseum, sortOrder:0, url };
               });
               // Up to 3 museums + up to 9 landmarks, ranked by name length (shorter = more famous)
-              const museums = all.filter(s => s.isMuseum).sort((a,b) => a.name.length - b.name.length).slice(0,3);
-              const landmarks = all.filter(s => !s.isMuseum).sort((a,b) => a.name.length - b.name.length).slice(0,9);
-              const spots = [...landmarks, ...museums].map((s,i) => ({ ...s, sortOrder:i, isMuseum:undefined }));
-              if (spots.length > 0) setTouristSpots({ cityId: id, cityName, spots });
+              // Filter out entries missing coordinates (some Overpass ways have no center)
+              const withCoords = all.filter(s => s.lat && s.lon);
+              const museums = withCoords.filter(s => s.isMuseum).sort((a,b) => a.name.length - b.name.length).slice(0,3);
+              const landmarks = withCoords.filter(s => !s.isMuseum).sort((a,b) => a.name.length - b.name.length).slice(0,9);
+              const spots = [...landmarks, ...museums].map((s,i) => {
+                const { isMuseum, ...rest } = s;  // strip isMuseum
+                return { ...rest, sortOrder:i };
+              });
+              if (spots.length > 0) {
+                setTouristSpots({ cityId: id, cityName, spots });
+                setTouristSel(new Set(spots.map(s => s.id)));
+              }
             } catch(err) { console.warn("Overpass error", err); }
           }}>Ekle</button>
         </Modal>
       )}
 
       {touristSpots && (
-        <Modal onClose={() => setTouristSpots(null)}>
-          <ModalHead title={`🏛️ Turistik Noktalar`} onClose={() => setTouristSpots(null)}/>
-          <div style={{fontSize:14,color:"var(--muted)",marginBottom:14}}>
-            <b>{touristSpots.cityName}</b> için {touristSpots.spots.length} popüler yer bulundu. Hepsini ekleyeyim mi?
+        <Modal onClose={() => { setTouristSpots(null); setTouristSel(new Set()); }}>
+          <ModalHead title="🏛️ Turistik Noktalar" onClose={() => { setTouristSpots(null); setTouristSel(new Set()); }}/>
+          <div style={{fontSize:13,color:"var(--muted)",marginBottom:10}}>
+            <b>{touristSpots.cityName}</b> için {touristSpots.spots.length} yer bulundu.
+            <span style={{marginLeft:6,color:"var(--pri)",fontWeight:700,cursor:"pointer"}}
+              onClick={() => setTouristSel(touristSel.size === touristSpots.spots.length ? new Set() : new Set(touristSpots.spots.map(s => s.id)))}>
+              {touristSel.size === touristSpots.spots.length ? "Tümünü kaldır" : "Tümünü seç"}
+            </span>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:18,maxHeight:260,overflowY:"auto"}}>
-            {touristSpots.spots.map(s => (
-              <div key={s.id} style={{background:"var(--bg2)",borderRadius:10,padding:"8px 12px",fontSize:13}}>
-                <b>{s.name}</b>{s.desc ? ` · ${s.desc}` : ""}
-              </div>
-            ))}
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16,maxHeight:300,overflowY:"auto"}}>
+            {touristSpots.spots.map(s => {
+              const checked = touristSel.has(s.id);
+              return (
+                <div key={s.id} className="tap" onClick={() => {
+                  const ns = new Set(touristSel);
+                  checked ? ns.delete(s.id) : ns.add(s.id);
+                  setTouristSel(ns);
+                }} style={{background: checked ? "var(--acc-soft)" : "var(--bg2)", borderRadius:10, padding:"9px 12px",
+                  fontSize:13, display:"flex", alignItems:"center", gap:10,
+                  border: checked ? "1.5px solid var(--acc)" : "1.5px solid transparent"}}>
+                  <div style={{width:20,height:20,borderRadius:6,border:"2px solid",flexShrink:0,
+                    borderColor: checked ? "var(--acc)" : "var(--border)",
+                    background: checked ? "var(--acc)" : "transparent",
+                    display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:800}}>
+                    {checked && "✓"}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:13}}>{s.name}</div>
+                    {s.desc && <div style={{fontSize:11,color:"var(--muted)",textTransform:"capitalize"}}>{s.desc}</div>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div style={{display:"flex",gap:10}}>
-            <button className="btn-pri tap" style={{flex:1}} onClick={() => {
+          <button className="btn-pri tap" style={{width:"100%",marginBottom:8}} disabled={touristSel.size === 0}
+            onClick={() => {
+              const chosen = touristSpots.spots.filter(s => touristSel.has(s.id));
               const updates = {};
-              touristSpots.spots.forEach((s, i) => { updates[`customPlaces/${s.id}`] = { ...s, sortOrder: i }; });
-              window._db.ref(`trips/${activeTrip}`).update(updates);
-              toast(`${touristSpots.spots.length} mekan eklendi!`, "🏛️");
+              chosen.forEach((s, i) => {
+                // Clean: remove undefined fields before Firebase write
+                const clean = {};
+                Object.entries(s).forEach(([k, v]) => { if (v !== undefined) clean[k] = v; });
+                clean.sortOrder = i;
+                updates[`customPlaces/${s.id}`] = clean;
+              });
+              window._db.ref(`trips/${activeTrip}`).update(updates)
+                .then(() => toast(`${chosen.length} mekan eklendi!`, "🏛️"))
+                .catch(() => toast("Mekanlar eklenemedi.", "❌"));
               setTouristSpots(null);
-            }}>Hepsini Ekle</button>
-            <button className="btn-out tap" style={{flex:1}} onClick={() => setTouristSpots(null)}>Geç</button>
-          </div>
+              setTouristSel(new Set());
+            }}>
+            {touristSel.size > 0 ? `${touristSel.size} Mekanı Ekle` : "Seçim Yapılmadı"}
+          </button>
+          <button className="btn-out tap" style={{width:"100%"}} onClick={() => { setTouristSpots(null); setTouristSel(new Set()); }}>Geç</button>
         </Modal>
       )}
 

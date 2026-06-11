@@ -832,12 +832,15 @@ function App() {
   const [commentInputs, setCommentInputs] = useState({});
   const [dragPlaceId, setDragPlaceId] = useState(null);
   const [dragOverDay, setDragOverDay] = useState(null);
+  const [compareTrip, setCompareTrip] = useState(null);
+  const [compareTripData, setCompareTripData] = useState(null);
   // Ref'ler
   const mapRef = useRef(null), polyRef = useRef(null), userMarkerRef = useRef(null);
   const memberMarkersRef = useRef([]);
   const routeMarkersRef = useRef([]);
   const mapCityRef = useRef(null), firstLoad = useRef(true), seenIds = useRef(new Set()), seenTrips = useRef(new Set());
   const fileInputRef = useRef({}), receiptInputRef = useRef(null);
+  const touchDragRef = useRef({ id: null, ghost: null, startX: 0, startY: 0, active: false, timer: null, overDay: null });
 
   // ── Toast
   const toast = (msg, icon = "📢") => {
@@ -1203,6 +1206,59 @@ function App() {
     toast("Fotoğraf yüklendi!", "📸");
   };
 
+  // ── Gezi karşılaştırma verisi
+  useEffect(() => {
+    if (!compareTrip || compareTrip === activeTrip) { setCompareTripData(null); return; }
+    window._db.ref(`trips/${compareTrip}`).once("value")
+      .then(s => setCompareTripData(s.val()))
+      .catch(() => setCompareTripData(null));
+  }, [compareTrip]);
+
+  // ── Touch sürükleme (mobil gün planı)
+  const startTouchDrag = (e, placeId, placeName) => {
+    const touch = e.touches[0];
+    const ref = touchDragRef.current;
+    ref.id = placeId; ref.startX = touch.clientX; ref.startY = touch.clientY;
+    ref.active = false; ref.overDay = null;
+    ref.timer = setTimeout(() => {
+      ref.active = true;
+      const ghost = document.createElement('div');
+      ghost.style.cssText = `position:fixed;left:${touch.clientX-60}px;top:${touch.clientY-22}px;background:#1A1A1A;color:#fff;padding:8px 14px;border-radius:12px;font-size:12px;font-weight:700;z-index:9999;pointer-events:none;opacity:.88;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 16px rgba(0,0,0,.4);`;
+      ghost.textContent = '📍 ' + placeName;
+      document.body.appendChild(ghost);
+      ref.ghost = ghost;
+      if (navigator.vibrate) navigator.vibrate(40);
+      setDragPlaceId(placeId);
+    }, 450);
+  };
+  const moveTouchDrag = (e) => {
+    const ref = touchDragRef.current;
+    if (!ref.id) return;
+    const touch = e.touches[0];
+    if (!ref.active) {
+      if (Math.abs(touch.clientX - ref.startX) > 8 || Math.abs(touch.clientY - ref.startY) > 8) {
+        clearTimeout(ref.timer); ref.id = null;
+      }
+      return;
+    }
+    e.preventDefault();
+    if (ref.ghost) { ref.ghost.style.left = (touch.clientX-60)+'px'; ref.ghost.style.top = (touch.clientY-22)+'px'; }
+    if (ref.ghost) ref.ghost.style.display = 'none';
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (ref.ghost) ref.ghost.style.display = '';
+    const dayCard = el?.closest('[data-planday]');
+    ref.overDay = dayCard ? parseInt(dayCard.dataset.planday) : null;
+    setDragOverDay(ref.overDay);
+  };
+  const endTouchDrag = () => {
+    const ref = touchDragRef.current;
+    clearTimeout(ref.timer);
+    if (ref.active && ref.id && ref.overDay !== null) wr(`placeDays/${ref.id}`, ref.overDay);
+    if (ref.ghost) { ref.ghost.remove(); ref.ghost = null; }
+    ref.id = null; ref.active = false; ref.overDay = null;
+    setDragPlaceId(null); setDragOverDay(null);
+  };
+
   // ── useMemo'lar (koşullu return'lerden önce)
   const nearbyPlaces = useMemo(() => {
     if (!fData || !userLoc || !nearbyMode) return null;
@@ -1282,6 +1338,14 @@ function App() {
                 <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
               </svg>
               E-posta ile Giriş Yap
+            </button>
+            {/* Hesap Oluştur */}
+            <button className="ebtn" style={{marginTop:8}} onClick={()=>{setEmailMode("register");setAuthErr(null);}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
+              </svg>
+              Hesap Oluştur
             </button>
             {authErr && <div style={{fontSize:12,color:"var(--red)",background:"rgba(228,84,63,.08)",padding:"10px 14px",borderRadius:12,marginTop:12}}>{authErr}</div>}
           </div>
@@ -1808,36 +1872,47 @@ function App() {
               assigned.forEach(p => { (byDay[pDay(p)] = byDay[pDay(p)] || []).push(p); });
               return Object.keys(byDay).map(Number).sort((a, b) => a - b).map(d => (
                 <div key={d} className="card"
+                  data-planday={d}
                   onDragOver={e => { e.preventDefault(); setDragOverDay(d); }}
-                  onDragLeave={() => setDragOverDay(null)}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDay(null); }}
                   onDrop={e => {
                     e.preventDefault();
-                    if (dragPlaceId && pDay({id: dragPlaceId}) !== d) wr(`placeDays/${dragPlaceId}`, d);
+                    if (dragPlaceId) wr(`placeDays/${dragPlaceId}`, d);
                     setDragPlaceId(null); setDragOverDay(null);
                   }}
-                  style={{outline: dragOverDay === d ? "2px solid var(--acc)" : "none", transition:"outline .15s"}}>
+                  style={{outline: dragOverDay === d ? "2.5px solid var(--acc)" : "2.5px solid transparent",
+                    background: dragOverDay === d ? "rgba(79,70,229,.04)" : "#fff",
+                    transition:"outline .12s, background .12s"}}>
                   <div style={{fontWeight:800,fontSize:15,marginBottom:10,color:"var(--pri)",display:"flex",alignItems:"center",gap:8}}>
                     📅 {d}. Gün
                     <span style={{fontSize:11,color:"var(--muted)",fontWeight:600}}>{byDay[d].length} mekan</span>
-                    {dragOverDay === d && <span style={{fontSize:11,color:"var(--acc)",fontWeight:700}}>Buraya bırak →</span>}
+                    {dragOverDay === d && <span style={{fontSize:11,color:"var(--acc)",fontWeight:700,animation:"fadeUp .2s ease"}}>← bırak</span>}
                   </div>
                   {byDay[d].map(p => (
                     <div key={p.id} className="stat-row"
-                      draggable="true"
-                      onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDragPlaceId(p.id); }}
-                      onDragEnd={() => { setDragPlaceId(null); setDragOverDay(null); }}
-                      style={{cursor:"grab", opacity: dragPlaceId === p.id ? 0.5 : 1, background: dragPlaceId === p.id ? "var(--surface-2)" : "transparent", borderRadius:8, paddingLeft:6}}>
+                      style={{opacity: dragPlaceId === p.id ? 0.4 : 1, transition:"opacity .15s",
+                        background: dragPlaceId === p.id ? "var(--surface-2)" : "transparent", borderRadius:8}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-                        <span style={{color:"var(--muted)",fontSize:16,cursor:"grab"}}>⠿</span>
+                        {/* Tutaç — hem mouse hem touch sürüklemeyi destekler */}
+                        <span
+                          draggable="true"
+                          onDragStart={e => { e.stopPropagation(); e.dataTransfer.effectAllowed = "move"; setDragPlaceId(p.id); }}
+                          onDragEnd={() => { setDragPlaceId(null); setDragOverDay(null); }}
+                          onTouchStart={e => startTouchDrag(e, p.id, p.name)}
+                          onTouchMove={moveTouchDrag}
+                          onTouchEnd={endTouchDrag}
+                          style={{color:"var(--muted)",fontSize:18,cursor:"grab",touchAction:"none",
+                            padding:"4px 6px",borderRadius:6,flexShrink:0,
+                            WebkitUserSelect:"none",userSelect:"none"}}>⠿</span>
                         <div className={`check tap${visited[p.id] ? " on" : ""}`} style={{width:22,height:22,borderRadius:7}}
                           onClick={() => wr(`visited/${p.id}`, !visited[p.id])}>{visited[p.id] && <span style={{fontSize:12}}>✓</span>}</div>
-                        <div style={{minWidth:0}}>
+                        <div style={{minWidth:0,flex:1}}>
                           <div style={{fontWeight:700,fontSize:13,textDecoration:visited[p.id]?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
                           <div style={{fontSize:10,color:"var(--muted)"}}>{p.cityEmoji} {p.cityName}</div>
                         </div>
                       </div>
                       <select value={pDay(p)} onChange={e => wr(`placeDays/${p.id}`, parseInt(e.target.value, 10) || null)}
-                        style={{width:"auto",padding:"3px 8px",fontSize:11,borderRadius:8}}>
+                        style={{width:"auto",padding:"3px 8px",fontSize:11,borderRadius:8,flexShrink:0}}>
                         <option value={0}>Kaldır</option>
                         {Array.from({length:MAX_DAYS}, (_, i) => <option key={i+1} value={i+1}>{i+1}. gün</option>)}
                       </select>
@@ -2033,6 +2108,90 @@ function App() {
         </div>}
 
         {masrafSub === "analiz" && <div style={{padding:18}}>
+
+          {/* Gezi Karşılaştırması */}
+          {(myTrips||[]).filter(t => t.id !== activeTrip).length > 0 && (
+            <div className="card">
+              <div className="sec-title">📊 Gezi Karşılaştır</div>
+              <select value={compareTrip||""} onChange={e => setCompareTrip(e.target.value||null)}
+                style={{marginBottom:14}}>
+                <option value="">— Karşılaştırılacak gezi seç —</option>
+                {(myTrips||[]).filter(t => t.id !== activeTrip).map(t => (
+                  <option key={t.id} value={t.id}>{t.emoji||"✈️"} {t.name}</option>
+                ))}
+              </select>
+              {compareTrip && (() => {
+                const cd = compareTripData;
+                const cName = (myTrips||[]).find(t=>t.id===compareTrip)?.name || "Önceki Gezi";
+
+                // Aktif gezi metrikleri
+                const aExps = expenses.filter(e=>e.currency==="EUR"&&!e.isSettlement);
+                const aTotal = aExps.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+                const aPlaces = allCities.flatMap(c=>[...(STATIC_PLACES[c.id]||[]),...Object.values(TD.customPlaces||{}).filter(p=>p.city===c.id)]);
+                const aVisited = aPlaces.filter(p=>visited[p.id]).length;
+                const aMembers = memberList.length;
+                const aDays = activeTripMeta?.startDate && activeTripMeta?.endDate
+                  ? Math.round((new Date(activeTripMeta.endDate)-new Date(activeTripMeta.startDate))/86400000)+1 : null;
+
+                // Karşılaştırma gezisi metrikleri
+                const cExps = cd ? Object.values(cd.expenses||{}).filter(e=>e.currency==="EUR"&&!e.isSettlement) : [];
+                const cTotal = cExps.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+                const cCustomP = cd ? Object.values(cd.customPlaces||{}) : [];
+                const cVisit = cd ? Object.values(cd.visited||{}).length : 0;
+                const cMembers = cd ? Object.keys(cd.members||{}).length : 0;
+                const cMeta = cd?.meta||{};
+                const cDays = cMeta.startDate && cMeta.endDate
+                  ? Math.round((new Date(cMeta.endDate)-new Date(cMeta.startDate))/86400000)+1 : null;
+
+                const Row = ({label, a, b, better, fmt}) => {
+                  const aN = parseFloat(a)||0, bN = parseFloat(b)||0;
+                  const aWins = better==="low" ? aN<=bN : aN>=bN;
+                  return (
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,padding:"10px 0",borderBottom:"1px solid var(--border)",alignItems:"center"}}>
+                      <span style={{fontSize:12,color:"var(--muted)"}}>{label}</span>
+                      <div style={{textAlign:"center",fontWeight:800,fontSize:14,
+                        color: aN===bN ? "var(--ink-2)" : aWins ? "var(--green)" : "var(--red)",
+                        background: aN===bN ? "var(--surface-2)" : aWins ? "rgba(62,138,96,.08)" : "rgba(228,84,63,.06)",
+                        borderRadius:8,padding:"4px 6px"}}>
+                        {fmt ? fmt(aN) : aN}
+                        {aN!==bN && <span style={{fontSize:9,marginLeft:2}}>{aWins?"▲":"▼"}</span>}
+                      </div>
+                      <div style={{textAlign:"center",fontWeight:700,fontSize:13,color:"var(--ink-3)",
+                        background:"var(--surface-2)",borderRadius:8,padding:"4px 6px"}}>
+                        {fmt ? fmt(bN) : bN}
+                      </div>
+                    </div>
+                  );
+                };
+
+                return (
+                  <div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,marginBottom:4}}>
+                      <span/>
+                      <div style={{textAlign:"center",fontSize:10,fontWeight:800,color:"var(--acc)",background:"var(--acc-soft)",borderRadius:8,padding:"3px 4px"}}>{activeTripMeta?.name||"Bu Gezi"}</div>
+                      <div style={{textAlign:"center",fontSize:10,fontWeight:800,color:"var(--muted)",background:"var(--surface-2)",borderRadius:8,padding:"3px 4px"}}>{cName}</div>
+                    </div>
+                    {!cd ? (
+                      <div style={{textAlign:"center",padding:"16px 0",fontSize:12,color:"var(--muted)"}}>⏳ Veri yükleniyor…</div>
+                    ) : (
+                      <>
+                        <Row label="💶 Toplam harcama (EUR)" a={aTotal} b={cTotal} better="low" fmt={v=>`€${v.toFixed(0)}`}/>
+                        <Row label="📍 Ziyaret edilen mekan" a={aVisited} b={cVisit} better="high"/>
+                        <Row label="👥 Üye sayısı" a={aMembers} b={cMembers}/>
+                        {(aDays||cDays) && <Row label="📅 Gezi süresi (gün)" a={aDays||"?"} b={cDays||"?"}/>}
+                        <Row label="🗺️ Toplam mekan" a={aPlaces.length} b={cCustomP.length} better="high"/>
+                        <div style={{fontSize:11,color:"var(--muted)",marginTop:10,textAlign:"center",lineHeight:1.5}}>
+                          {aTotal < cTotal && aTotal > 0 ? `✅ Bu gezide €${(cTotal-aTotal).toFixed(0)} daha az harcadın!` :
+                           aTotal > cTotal && cTotal > 0 ? `📈 Bu gezide €${(aTotal-cTotal).toFixed(0)} daha fazla harcandı.` : ""}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           <div className="card">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
               <div className="sec-title" style={{margin:0}}>🍩 Harcama Dağılımı</div>

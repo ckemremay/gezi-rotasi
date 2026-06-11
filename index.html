@@ -308,11 +308,12 @@ const firebaseConfig={
   appId:"1:74072730165:web:398a182604e78172585f7c"
 };
 firebase.initializeApp(firebaseConfig);
-/* Güvenlik: Authentication > Google açık olmalı.
+/* Güvenlik: Authentication > Google / Email açık olmalı.
    Kurallar: { "rules": { ".read": "auth != null", ".write": "auth != null" } }
    Google girişi file:// üzerinden çalışmaz; GitHub Pages / localhost gerekir. */
-window._dp=`artifacts/${sanitizedAppId}/public/data`;
 window._db=firebase.database();
+// ?join=tripId parametresi: davet linki
+window._joinParam=(()=>{try{return new URL(location.href).searchParams.get('join');}catch{return null;}})();
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
@@ -610,14 +611,22 @@ function App() {
   const [emailMode, setEmailMode] = useState("");
   const [emailForm, setEmailForm] = useState({ email:"", pass:"", pass2:"" });
   const [emailLoading, setEmailLoading] = useState(false);
+  // Kullanıcı profili ve geziler (null = henüz yüklenmedi)
+  const [userProfile, setUserProfile] = useState(undefined);  // undefined: yükleniyor, null: yok
+  const [myTrips, setMyTrips] = useState(null);               // null: yükleniyor, []: boş
+  // Aktif gezi
+  const [activeTrip, setActiveTrip] = useState(() => {
+    const s = localStorage.getItem("gezi_trip");
+    return s && s !== "default" ? s : null;
+  });
+  // Davet linki: ?join=tripId
+  const [pendingJoin, setPendingJoin] = useState(() => window._joinParam);
   // Veri
   const [fData, setFData] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [toasts, setToasts] = useState([]);
   const [notifPerm, setNotifPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "denied");
-  // Gezi (trip) seçimi — cihazda saklanır
-  const [trip, setTrip] = useState(() => localStorage.getItem("gezi_trip") || "default");
   // Sekmeler
   const [tab, setTab] = useState("rota");
   const [planSub, setPlanSub] = useState("gun");
@@ -728,45 +737,115 @@ function App() {
     setEmailLoading(false);
   };
 
-  // ── Firebase bağlantı + veri (giriş tamamlanmadan dinleme başlamaz)
+  // ── Kullanıcı profili + geziler indeksi
   useEffect(() => {
-    if (!user) return;
-    const rc = window._db.ref(".info/connected");
+    if (!user) { setUserProfile(undefined); setMyTrips(null); return; }
+    const db = window._db;
+    const uid = user.uid;
+    const rc = db.ref(".info/connected");
     rc.on("value", s => setIsOnline(s.val() === true));
-    const rd = window._db.ref(window._dp);
-    rd.on("value", s => setFData(s.val() || {}),
-      err => { console.error(err); setAuthErr("Veriye erişim izni reddedildi. Veritabanı kurallarını kontrol edin."); });
-    return () => { rc.off(); rd.off(); };
+    // /users/{uid}/ → profil + geziler indeksi
+    const uRef = db.ref(`users/${uid}`);
+    uRef.on("value", s => {
+      const d = s.val() || {};
+      setUserProfile(d.profile || null);
+      setMyTrips(Object.values(d.trips || {}));
+    });
+    return () => { rc.off(); uRef.off(); };
   }, [user]);
 
-  // ── Yazma (gezi kapsamı + hata bildirimi)
-  const tp = path => trip === "default" ? path : `trips_data/${trip}/${path}`;
+  // ── Aktif gezi verisi
+  useEffect(() => {
+    if (!user || !activeTrip) { setFData(null); return; }
+    setFData(null);
+    const rd = window._db.ref(`trips/${activeTrip}`);
+    rd.on("value", s => setFData(s.val() || {}),
+      err => { console.error(err); setAuthErr("Veriye erişim reddedildi. Gezi kurallarını kontrol edin."); });
+    return () => rd.off();
+  }, [user, activeTrip]);
+
+  // ── Yazma fonksiyonları
   const wrRaw = (path, val) => {
     setSyncing(true);
     const done = () => setSyncing(false);
-    const p = window._db.ref(window._dp + "/" + path).set(val);
+    const p = window._db.ref(`trips/${activeTrip}/${path}`).set(val);
     p.then(done).catch(err => { console.error(err); toast("Kaydedilemedi! Bağlantıyı kontrol et.", "⚠️"); done(); });
-    setTimeout(done, 2000); // çevrimdışıyken gösterge takılı kalmasın
+    setTimeout(done, 2000);
     return p;
   };
-  const wr = (path, val) => wrRaw(tp(path), val);
+  const wr = wrRaw;
+  // Kullanıcı profil yazma
+  const wrUser = (path, val) => window._db.ref(`users/${myUid}/${path}`).set(val);
 
-  // ── Gezi verisi erişimi (varsayılan gezi = kök; yeni geziler trips_data altında)
-  const TD = fData ? (trip === "default" ? fData : ((fData.trips_data || {})[trip] || {})) : {};
+  // ── Aktif gezi verisi (TD = trip data)
+  const TD = fData || {};
+
+  // ── Gezi yönetimi
+  const switchTrip = id => {
+    setActiveTrip(id);
+    localStorage.setItem("gezi_trip", id);
+    setCity("bremen"); setRouteIds([]); setNearbyMode(false); setDayFilter(0);
+    firstLoad.current = true;
+  };
+  const createTrip = (name, emoji) => {
+    const id = "trip_" + newId();
+    const meta = { id, name, emoji: emoji || "✈️", ownerUid: myUid, createdAt: Date.now() };
+    const memberEntry = { uid: myUid, name: userProfile?.name || "?", email: user?.email || "", role: "owner", joinedAt: Date.now() };
+    const userTripEntry = { ...meta, role: "owner" };
+    const updates = {};
+    updates[`trips/${id}/meta`] = meta;
+    updates[`trips/${id}/members/${myUid}`] = memberEntry;
+    updates[`users/${myUid}/trips/${id}`] = userTripEntry;
+    window._db.ref().update(updates);
+    switchTrip(id);
+    toast("Gezi oluşturuldu! 🎉", "✈️");
+  };
+  const joinTrip = async (tripId) => {
+    if (!tripId) return;
+    try {
+      const snap = await window._db.ref(`trips/${tripId}/meta`).once("value");
+      const meta = snap.val();
+      if (!meta) { toast("Geçersiz davet linki.", "❌"); return; }
+      const memberEntry = { uid: myUid, name: userProfile?.name || "?", email: user?.email || "", role: "editor", joinedAt: Date.now() };
+      const userTripEntry = { ...meta, role: "editor" };
+      const updates = {};
+      updates[`trips/${tripId}/members/${myUid}`] = memberEntry;
+      updates[`users/${myUid}/trips/${tripId}`] = userTripEntry;
+      await window._db.ref().update(updates);
+      // URL'den join parametresini temizle
+      try { const u = new URL(location.href); u.searchParams.delete("join"); history.replaceState({}, "", u.toString()); } catch {}
+      switchTrip(tripId);
+      toast(`"${meta.name}" gezisine katıldın!`, "🎉");
+    } catch(e) { toast("Geziye katılırken hata oluştu.", "❌"); }
+  };
+  const leaveTrip = async (tripId) => {
+    const updates = {};
+    updates[`trips/${tripId}/members/${myUid}`] = null;
+    updates[`users/${myUid}/trips/${tripId}`] = null;
+    await window._db.ref().update(updates);
+    if (activeTrip === tripId) { setActiveTrip(null); localStorage.removeItem("gezi_trip"); }
+    toast("Geziden ayrıldın.", "👋");
+  };
+  const getInviteLink = () => {
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set("join", activeTrip);
+      return u.toString();
+    } catch { return location.href + "?join=" + activeTrip; }
+  };
 
   // ── Bildirim tespiti
   useEffect(() => {
     if (!fData) return;
-    const reg = (pfx, obj) => Object.keys(obj || {}).forEach(id => seenIds.current.add(pfx + trip + id));
-    // İlk yüklemede ve yeni bir geziye ilk geçişte mevcut kayıtlar bildirim üretmesin
-    if (firstLoad.current || !seenTrips.current.has(trip)) {
+    const reg = (pfx, obj) => Object.keys(obj || {}).forEach(id => seenIds.current.add(pfx + activeTrip + id));
+    if (firstLoad.current || !seenTrips.current.has(activeTrip)) {
       reg("e", TD.expenses); reg("p", TD.customPlaces); reg("po", TD.polls);
-      seenTrips.current.add(trip);
+      seenTrips.current.add(activeTrip);
       firstLoad.current = false;
       return;
     }
     Object.values(TD.expenses || {}).forEach(e => {
-      const k = "e" + trip + e.id;
+      const k = "e" + activeTrip + e.id;
       if (seenIds.current.has(k)) return;
       seenIds.current.add(k);
       const msg = `${mName(e.paidBy)} masraf ekledi: ${e.desc} (${e.amount}${SYM[e.currency] || ""})`;
@@ -774,18 +853,18 @@ function App() {
       if (notifPerm === "granted" && document.hidden) try { new Notification("Gezi Rotası", { body: msg }); } catch {}
     });
     Object.values(TD.customPlaces || {}).forEach(p => {
-      const k = "p" + trip + p.id;
+      const k = "p" + activeTrip + p.id;
       if (seenIds.current.has(k)) return;
       seenIds.current.add(k);
       toast(`${mName(p.addedBy)} mekan önerdi: ${p.name}`, "📍");
     });
     Object.values(TD.polls || {}).forEach(p => {
-      const k = "po" + trip + p.id;
+      const k = "po" + activeTrip + p.id;
       if (seenIds.current.has(k)) return;
       seenIds.current.add(k);
       toast(`${mName(p.createdBy)} anket açtı: ${p.question}`, "🗳️");
     });
-  }, [fData, trip]);
+  }, [fData, activeTrip]);
 
   // ── Hava + kur
   const allCitiesNow = fData ? [...DEFAULT_CITIES, ...Object.values(TD.cities || {})] : DEFAULT_CITIES;
@@ -799,7 +878,7 @@ function App() {
     fetch("https://open.er-api.com/v6/latest/EUR").then(r => r.json()).then(d => {
       if (d.rates) setRates({ EUR:1, TRY:d.rates.TRY || 38.5, USD:d.rates.USD || 1.08, DKK:d.rates.DKK || 7.46 });
     }).catch(() => {});
-  }, [city, trip, fData && TD.cities]);
+  }, [city, activeTrip, fData && TD.cities]);
 
   // ── Harita
   useEffect(() => {
@@ -809,7 +888,7 @@ function App() {
       const el = document.getElementById("leafmap");
       if (!c || !el) return;
       const places = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
-      if (mapCityRef.current !== trip + city) {
+      if (mapCityRef.current !== activeTrip + city) {
         if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; polyRef.current = null; userMarkerRef.current = null; memberMarkersRef.current = []; }
         const m = L.map(el).setView([c.lat, c.lon], 14);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM" }).addTo(m);
@@ -819,7 +898,7 @@ function App() {
             .addTo(m).bindPopup(`<b>${esc(p.name)}</b><br><small>${esc(p.desc || "")}</small>`);
         });
         mapRef.current = m;
-        mapCityRef.current = trip + city;
+        mapCityRef.current = activeTrip + city;
       }
       // Rota çizgisi
       if (polyRef.current) { mapRef.current?.removeLayer(polyRef.current); polyRef.current = null; }
@@ -850,7 +929,7 @@ function App() {
       }
     }, 80);
     return () => clearTimeout(timer);
-  }, [city, tab, fData, routeIds, userLoc, trip]);
+  }, [city, tab, fData, routeIds, userLoc, activeTrip]);
   useEffect(() => () => { mapRef.current?.remove(); }, []);
 
   // ── Konum
@@ -893,7 +972,7 @@ function App() {
     const cp = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
     return cp.map(p => ({ ...p, dist: haversine(userLoc.lat, userLoc.lon, p.lat || 0, p.lon || 0) }))
       .filter(p => p.dist < 600).sort((a, b) => a.dist - b.dist);
-  }, [userLoc, nearbyMode, city, fData, trip]);
+  }, [userLoc, nearbyMode, city, fData, activeTrip]);
   const routeStats = useMemo(() => {
     if (!fData || routeIds.length < 2) return null;
     const allP = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
@@ -903,7 +982,7 @@ function App() {
       if (a && b && a.lat && b.lat) total += haversine(a.lat, a.lon, b.lat, b.lon);
     }
     return { dist: total, min: walkMin(total), stops: routeIds.length };
-  }, [routeIds, city, fData, trip]);
+  }, [routeIds, city, fData, activeTrip]);
   const convResult = useMemo(() => {
     const amt = parseFloat(convAmt) || 0;
     const inEUR = amt / (rates[convBase] || 1);
@@ -981,30 +1060,25 @@ function App() {
       </div>
     </div>
   );
-  // ── Yükleniyor (ilerleme çubuğu)
-  if (user === undefined || !fData) return (
+  // ── Yükleniyor: kullanıcı verisi
+  if (user === undefined || userProfile === undefined || myTrips === null) return (
     <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:18,background:"linear-gradient(135deg,#EFF6FF,#E0E7FF)"}}>
       <div className="login-logo" style={{marginBottom:0}}>🧭</div>
       <div className="loadbar"><div/></div>
-      <div style={{fontSize:12,fontWeight:600,color:"#64748B"}}>Gezi verilerin yükleniyor…</div>
+      <div style={{fontSize:12,fontWeight:600,color:"#64748B"}}>Yükleniyor…</div>
       {authErr && <div style={{fontSize:12,color:"var(--red)",maxWidth:300,textAlign:"center"}}>{authErr}</div>}
     </div>
   );
 
-  // ── Üyeler
-  const members = fData.members || {};
-  const memberList = Object.values(members).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
-  const myMember = myUid ? members[myUid] : null;
-
-  // ── Zorunlu isim ekranı
-  if (!myMember || showNameEdit) {
+  // ── İsim ekranı (ilk kez veya düzenleme)
+  if (!userProfile?.name || showNameEdit) {
     const canSave = nameForm.first.trim().length >= 2 && nameForm.last.trim().length >= 2;
     return (
       <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24,maxWidth:480,margin:"0 auto"}}>
         <div style={{width:"100%"}}>
           <div style={{fontSize:44,textAlign:"center",marginBottom:8}}>👋</div>
           <h2 style={{fontFamily:"'Libre Baskerville',serif",fontSize:22,textAlign:"center",marginBottom:6,color:"var(--pri)"}}>
-            {myMember ? "İsmini Düzenle" : "Hoş geldin!"}
+            {showNameEdit ? "İsmini Düzenle" : "Hoş geldin!"}
           </h2>
           <p style={{fontSize:13,color:"var(--muted)",textAlign:"center",marginBottom:22}}>Harcamalar, oylar ve öneriler bu isimle görünür.</p>
           <label className="lbl">İsim</label>
@@ -1013,13 +1087,17 @@ function App() {
           <label className="lbl">Soyisim</label>
           <input value={nameForm.last} placeholder="Örn: Yılmaz" style={{marginBottom:20}}
             onChange={e => setNameForm({ ...nameForm, last: e.target.value })}/>
-          <button className="btn-pri tap" style={{opacity:canSave?1:.45}} onClick={() => {
+          <button className="btn-pri tap" style={{opacity:canSave?1:.45}} onClick={async () => {
             if (!canSave) { toast("İsim ve soyisim en az 2'şer harf olmalı.", "⚠️"); return; }
             const nm = `${nameForm.first.trim()} ${nameForm.last.trim()}`;
-            wrRaw(`members/${myUid}`, { uid: myUid, name: nm, email: user.email || "", joinedAt: (myMember && myMember.joinedAt) || Date.now(), loc: (myMember && myMember.loc) || null });
+            await wrUser("profile", { name: nm, email: user.email || "" });
+            // Aktif gezideyse üye kaydını da güncelle
+            if (activeTrip) wrRaw(`members/${myUid}/name`, nm);
             setShowNameEdit(false);
+            // Davet linki bekleniyorsa hemen katıl
+            if (pendingJoin && !showNameEdit) { joinTrip(pendingJoin); setPendingJoin(null); }
           }}>Kaydet ve Devam Et</button>
-          {myMember && <button className="btn-out tap" style={{marginTop:10}} onClick={() => setShowNameEdit(false)}>Vazgeç</button>}
+          {showNameEdit && <button className="btn-out tap" style={{marginTop:10}} onClick={() => setShowNameEdit(false)}>Vazgeç</button>}
           <div className="tap" onClick={doLogout} style={{textAlign:"center",fontSize:12,color:"var(--muted)",marginTop:16,textDecoration:"underline"}}>
             {user.email ? `${user.email} — Çıkış yap` : "Çıkış yap"}
           </div>
@@ -1028,10 +1106,117 @@ function App() {
     );
   }
 
+  // ── Davet linki bekleniyorsa otomatik katıl
+  if (pendingJoin) {
+    joinTrip(pendingJoin);
+    setPendingJoin(null);
+    return (
+      <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:18,background:"linear-gradient(135deg,#EFF6FF,#E0E7FF)"}}>
+        <div className="login-logo">🎉</div>
+        <div className="loadbar"><div/></div>
+        <div style={{fontSize:13,fontWeight:600,color:"#64748B"}}>Geziye katılınıyor…</div>
+      </div>
+    );
+  }
+
+  // ── Gezi listesi ekranı (aktif gezi seçilmemişse)
+  if (!activeTrip) {
+    return (
+      <div style={{minHeight:"100vh",background:"linear-gradient(180deg,#EFF6FF 0%,#E0E7FF 100%)",padding:"0 0 40px"}}>
+        <div style={{maxWidth:480,margin:"0 auto",padding:"0 18px"}}>
+          {/* Başlık */}
+          <div style={{paddingTop:"calc(36px + env(safe-area-inset-top))",paddingBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#64748B",letterSpacing:".06em",textTransform:"uppercase"}}>Gezi Rotası</div>
+              <h1 style={{fontSize:26,fontWeight:900,color:"#1E293B",letterSpacing:"-.02em",marginTop:2}}>Gezilerim</h1>
+            </div>
+            <div style={{width:40,height:40,borderRadius:"50%",background:"var(--pri)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,cursor:"pointer"}}
+              onClick={() => { setNameForm({ first: userProfile.name.split(" ")[0] || "", last: userProfile.name.split(" ").slice(1).join(" ") || "" }); setShowNameEdit(true); }}>
+              {userProfile.name[0]}
+            </div>
+          </div>
+
+          {/* Gezi kartları */}
+          {tripList.length === 0 ? (
+            <div style={{textAlign:"center",padding:"60px 24px"}}>
+              <div style={{fontSize:56,marginBottom:12}}>🗺️</div>
+              <h2 style={{fontSize:20,fontWeight:800,color:"#1E293B",marginBottom:8}}>Henüz gezi yok</h2>
+              <p style={{fontSize:14,color:"#64748B",marginBottom:28,lineHeight:1.6}}>İlk gezini oluştur veya bir davet linki ile mevcut geziye katıl.</p>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
+              {tripList.map(t => (
+                <div key={t.id} className="tap" onClick={() => switchTrip(t.id)}
+                  style={{background:"#fff",borderRadius:20,padding:"16px 18px",boxShadow:"var(--e2)",display:"flex",alignItems:"center",gap:14}}>
+                  <div style={{width:48,height:48,borderRadius:14,background:"var(--acc-soft)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{t.emoji || "✈️"}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:800,fontSize:15,color:"#1E293B"}}>{t.name}</div>
+                    <div style={{fontSize:11,color:"#94A3B8",marginTop:2}}>{t.role === "owner" ? "👑 Sahibi" : "👤 Üye"} · {fmtTime(t.createdAt)}</div>
+                  </div>
+                  <div style={{color:"#CBD5E1",fontSize:20}}>›</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Yeni gezi oluştur */}
+          <div style={{background:"#fff",borderRadius:20,boxShadow:"var(--e1)",overflow:"hidden"}}>
+            {!showAddTrip ? (
+              <button className="tap" onClick={() => setShowAddTrip(true)}
+                style={{width:"100%",padding:"16px 18px",background:"none",border:"none",display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}>
+                <div style={{width:48,height:48,borderRadius:14,background:"var(--acc-soft)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>➕</div>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontWeight:700,fontSize:14,color:"var(--pri)"}}>Yeni Gezi Oluştur</div>
+                  <div style={{fontSize:11,color:"#94A3B8"}}>Sıfırdan bir gezi başlat, arkadaşlarını davet et</div>
+                </div>
+              </button>
+            ) : (
+              <div style={{padding:"18px 18px 20px"}}>
+                <div style={{fontWeight:800,fontSize:15,marginBottom:14,color:"#1E293B"}}>✈️ Yeni Gezi</div>
+                <input placeholder="Gezi adı (örn: Roma 2027)" value={newTrip.name} style={{marginBottom:10}}
+                  onChange={e => setNewTrip({ ...newTrip, name: e.target.value })}/>
+                <input value={newTrip.emoji} maxLength={4} placeholder="Emoji" style={{marginBottom:14,width:80}}
+                  onChange={e => setNewTrip({ ...newTrip, emoji: e.target.value })}/>
+                <div style={{display:"flex",gap:10}}>
+                  <button className="btn-pri tap" style={{flex:1}} onClick={() => {
+                    if (!newTrip.name.trim()) { toast("Gezi adı gerekli.", "⚠️"); return; }
+                    createTrip(newTrip.name.trim(), newTrip.emoji || "✈️");
+                    setShowAddTrip(false); setNewTrip({ name:"", emoji:"✈️" });
+                  }}>Oluştur</button>
+                  <button className="btn-out tap" onClick={() => setShowAddTrip(false)}>İptal</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Çıkış */}
+          <div className="tap" onClick={doLogout} style={{textAlign:"center",fontSize:12,color:"#94A3B8",marginTop:24,textDecoration:"underline"}}>
+            {user.email} — Çıkış yap
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Gezi verisi yükleniyorsa
+  if (!fData) return (
+    <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:18,background:"linear-gradient(135deg,#EFF6FF,#E0E7FF)"}}>
+      <div className="login-logo" style={{marginBottom:0}}>🧭</div>
+      <div className="loadbar"><div/></div>
+      <div style={{fontSize:12,fontWeight:600,color:"#64748B"}}>Gezi verileri yükleniyor…</div>
+      {authErr && <div style={{fontSize:12,color:"var(--red)",maxWidth:300,textAlign:"center"}}>{authErr}</div>}
+    </div>
+  );
+
+  // ── Üyeler (aktif gezi bağlamında)
+  const members = fData.members || {};
+  const memberList = Object.values(members).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+  const myMember = myUid ? (members[myUid] || { uid: myUid, name: userProfile?.name || "?" }) : null;
+
   // ── Türetilmiş gezi verileri
-  const trips = fData.trips || {};
-  const tripList = Object.values(trips).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  const activeTripName = trip === "default" ? "Bremen & Hamburg" : (trips[trip] ? trips[trip].name : "Gezi");
+  const tripList = (myTrips || []).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const activeTripMeta = fData?.meta || {};
+  const activeTripName = activeTripMeta.name || "Gezi";
   const visited = TD.visited || {};
   const placePhotos = TD.placePhotos || {};
   const placeDays = TD.placeDays || {};
@@ -1062,8 +1247,6 @@ function App() {
   const budgetSpent = budget ? expenses.filter(e => e.currency === budget.currency && !e.isSettlement).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) : 0;
   const budgetPct = budget && budget.amount > 0 ? Math.min(100, budgetSpent / budget.amount * 100) : 0;
   const budgetColor = budgetPct >= 90 ? "var(--red)" : budgetPct >= 70 ? "var(--amber)" : "var(--green)";
-  const switchTrip = id => { setTrip(id); localStorage.setItem("gezi_trip", id); setCity("bremen"); setRouteIds([]); setNearbyMode(false); setDayFilter(0); };
-
   // Anket yardımcıları
   const pollClosed = p => p.deadline && Date.now() > p.deadline;
   const optVotes = (votes, oi) => Object.values(votes || {}).filter(v =>
@@ -1089,7 +1272,7 @@ function App() {
       <div className="header">
         <div className="hero-top">
           <div>
-            <div className="eyebrow">{trips[trip]?.emoji || "🧭"} {activeTripName} Gezisi</div>
+            <div className="eyebrow">{activeTripMeta.emoji || "🧭"} {activeTripName} Gezisi</div>
             <h1>{headerTitle}</h1>
             <div className="meta">
               <span className="sync-pill">
@@ -1103,9 +1286,10 @@ function App() {
             </div>
           </div>
           <div className="avatar tap" title="İsmini düzenle" onClick={() => {
-            setNameForm({ first: myMember.name.split(" ")[0] || "", last: myMember.name.split(" ").slice(1).join(" ") || "" });
+            const n = userProfile?.name || "";
+            setNameForm({ first: n.split(" ")[0] || "", last: n.split(" ").slice(1).join(" ") || "" });
             setShowNameEdit(true);
-          }}>{myMember.name[0]}</div>
+          }}>{(userProfile?.name || "?")[0]}</div>
         </div>
         {tab === "rota" && (
           <div className="glass">
@@ -1587,41 +1771,51 @@ function App() {
         <div style={{padding:18}}>
           {/* Profil */}
           <div className="card" style={{display:"flex",alignItems:"center",gap:14}}>
-            <div style={{width:48,height:48,borderRadius:"50%",background:"var(--pri)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800}}>{myMember.name[0]}</div>
+            <div style={{width:48,height:48,borderRadius:"50%",background:"var(--pri)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800}}>{(userProfile?.name||"?")[0]}</div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:800,fontSize:16}}>{myMember.name}</div>
+              <div style={{fontWeight:800,fontSize:16}}>{userProfile?.name || "?"}</div>
               <div style={{fontSize:11,color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis"}}>{user.email}</div>
             </div>
             <button className="hbtn tap" style={{background:"var(--bg)",color:"var(--pri)",border:"1.5px solid var(--border)"}}
-              onClick={() => { setNameForm({ first: myMember.name.split(" ")[0] || "", last: myMember.name.split(" ").slice(1).join(" ") || "" }); setShowNameEdit(true); }}>Düzenle</button>
+              onClick={() => { const n=userProfile?.name||""; setNameForm({ first:n.split(" ")[0]||"", last:n.split(" ").slice(1).join(" ")||"" }); setShowNameEdit(true); }}>Düzenle</button>
           </div>
 
           {/* Geziler */}
           <div className="card">
-            <div className="sec-title">✈️ Gezilerim</div>
-            <div className={`list-row tap`} style={{marginBottom:9,border:trip === "default" ? "2px solid var(--pri)" : "1.5px solid var(--border)"}}
-              onClick={() => switchTrip("default")}>
-              <span style={{fontSize:20}}>🏰</span>
-              <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>Bremen & Hamburg</div>
-                <div style={{fontSize:10,color:"var(--muted)"}}>Varsayılan gezi</div></div>
-              {trip === "default" && <span className="badge">Aktif</span>}
+            <div className="sec-title" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>✈️ Gezilerim ({tripList.length})</span>
+              <span className="tap" style={{fontSize:12,color:"var(--pri)",fontWeight:700}} onClick={() => { setActiveTrip(null); localStorage.removeItem("gezi_trip"); }}>Tümünü Gör</span>
             </div>
             {tripList.map(t => (
-              <div key={t.id} className="list-row tap" style={{marginBottom:9,border:trip === t.id ? "2px solid var(--pri)" : "1.5px solid var(--border)",opacity:t.archived ? .65 : 1}}
+              <div key={t.id} className="list-row tap" style={{marginBottom:9,border:activeTrip === t.id ? "2px solid var(--pri)" : "1.5px solid var(--border)"}}
                 onClick={() => switchTrip(t.id)}>
                 <span style={{fontSize:20}}>{t.emoji || "✈️"}</span>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:700,fontSize:14}}>{t.name}</div>
-                  <div style={{fontSize:10,color:"var(--muted)"}}>{t.archived ? "📦 Arşivde" : fmtTime(t.createdAt)}</div>
+                  <div style={{fontSize:10,color:"var(--muted)"}}>{t.role === "owner" ? "👑 Sahibi" : "👤 Üye"} · {fmtTime(t.createdAt)}</div>
                 </div>
-                {trip === t.id && <span className="badge">Aktif</span>}
-                <div className="tap" style={{fontSize:10,fontWeight:800,color:"var(--muted)",padding:"4px 6px"}}
-                  onClick={e => { e.stopPropagation(); wrRaw(`trips/${t.id}/archived`, !t.archived); }}>
-                  {t.archived ? "↩️" : "📦"}
-                </div>
+                {activeTrip === t.id && <span className="badge">Aktif</span>}
+                {t.role !== "owner" && (
+                  <div className="tap" style={{fontSize:11,fontWeight:700,color:"var(--red)",padding:"4px 8px"}}
+                    onClick={e => { e.stopPropagation(); if(confirm("Bu geziden ayrılmak istiyor musun?")) leaveTrip(t.id); }}>
+                    Ayrıl
+                  </div>
+                )}
               </div>
             ))}
-            <button className="btn-out tap" onClick={() => setShowAddTrip(true)}>+ Yeni Gezi Oluştur</button>
+            <button className="btn-out tap" style={{marginBottom:10}} onClick={() => setShowAddTrip(true)}>+ Yeni Gezi Oluştur</button>
+            {/* Davet linki */}
+            <div style={{background:"var(--acc-soft)",borderRadius:14,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:18}}>🔗</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:13,color:"var(--acc)"}}>Bu Geziye Davet Et</div>
+                <div style={{fontSize:11,color:"#64748B"}}>Linki kopyala, arkadaşlarına gönder</div>
+              </div>
+              <button className="tap" style={{background:"var(--acc)",color:"#fff",border:"none",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}
+                onClick={() => { const link = getInviteLink(); navigator.clipboard?.writeText(link).then(()=>toast("Davet linki kopyalandı!", "🔗")).catch(()=>toast(link,"🔗")); }}>
+                Kopyala
+              </button>
+            </div>
           </div>
 
           {/* Araçlar */}
@@ -1636,7 +1830,7 @@ function App() {
                 <div style={{fontSize:10,color:"var(--muted)"}}>Grup haritada görür (12 saat görünür)</div></div>
               <span style={{color:"var(--muted)"}}>→</span>
             </div>
-            {myMember.loc && (
+            {myMember?.loc && (
               <div className="list-row tap" onClick={() => { wrRaw(`members/${myUid}/loc`, null); toast("Konum paylaşımı durduruldu.", "🔕"); }}>
                 <span style={{fontSize:20}}>🔕</span><div style={{flex:1,fontWeight:700,fontSize:14}}>Konum Paylaşımını Durdur</div>
               </div>
@@ -1834,12 +2028,9 @@ function App() {
             onChange={e => setNewTrip({ ...newTrip, emoji: e.target.value })}/>
           <button className="btn-pri tap" onClick={() => {
             if (!newTrip.name.trim()) { toast("Gezi adı gerekli.", "⚠️"); return; }
-            const id = "trip_" + newId();
-            wrRaw(`trips/${id}`, { id, name: newTrip.name.trim(), emoji: newTrip.emoji || "✈️", createdBy: myUid, createdAt: Date.now(), archived: false });
+            createTrip(newTrip.name.trim(), newTrip.emoji || "✈️");
             setShowAddTrip(false);
             setNewTrip({ name:"", emoji:"✈️" });
-            switchTrip(id);
-            toast("Yeni gezi oluşturuldu!", "✈️");
           }}>Oluştur ve Geç</button>
         </Modal>
       )}

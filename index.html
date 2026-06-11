@@ -426,6 +426,7 @@ const SYM = { TRY:"₺", EUR:"€", USD:"$", DKK:"kr" };
 // Eski kayıtlardaki 0-3 sayısal kimlikler için isimler
 const LEGACY_MEMBERS = ["Emre","Tuğçe","Erdem","Mihrap"];
 const MAX_DAYS = 9;
+const MEMBER_COLORS = ["#2563EB","#E4543F","#3E8A60","#E2A93B","#7B5EA7","#4ECDC4","#FF8C42","#45B7D1"];
 
 // ── YARDIMCILAR ───────────────────────────────────────────────────────────────
 function haversine(lat1, lon1, lat2, lon2) {
@@ -826,6 +827,11 @@ function App() {
   const [chartCur, setChartCur] = useState("EUR");
   const [convAmt, setConvAmt] = useState("100");
   const [convBase, setConvBase] = useState("EUR");
+  const [wxExpanded, setWxExpanded] = useState(false);
+  const [openComments, setOpenComments] = useState({});
+  const [commentInputs, setCommentInputs] = useState({});
+  const [dragPlaceId, setDragPlaceId] = useState(null);
+  const [dragOverDay, setDragOverDay] = useState(null);
   // Ref'ler
   const mapRef = useRef(null), polyRef = useRef(null), userMarkerRef = useRef(null);
   const memberMarkersRef = useRef([]);
@@ -1025,6 +1031,31 @@ function App() {
       return u.toString();
     } catch { return location.href + "?join=" + activeTrip; }
   };
+
+  // ── Gezi sayım bildirimleri
+  useEffect(() => {
+    const sd = fData?.meta?.startDate;
+    if (!sd) return;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const start = new Date(sd); start.setHours(0,0,0,0);
+    const diff = Math.round((start - today) / 86400000);
+    if (diff === 0) setTimeout(() => toast("Bugün gezi başlıyor! ✈️", "🎉"), 1000);
+    else if (diff === 1) setTimeout(() => toast("Gezi yarın başlıyor, hazır mısın?", "📅"), 1200);
+    else if (diff >= 2 && diff <= 3) setTimeout(() => toast(`Geziye ${diff} gün kaldı!`, "🗓️"), 1200);
+  }, [activeTrip, fData?.meta?.startDate]);
+
+  // ── Hava durumu → gezi tarihi uyarısı
+  useEffect(() => {
+    const sd = fData?.meta?.startDate;
+    if (!wxData?.daily || !sd) return;
+    const d = wxData.daily;
+    d.time.forEach((ds, i) => {
+      if (ds === sd) {
+        const code = d.weathercode[i];
+        if (code >= 61) toast(`Gezi başlangıcında (${ds}) kötü hava bekleniyor ${WMO[code] || "🌧️"}`, "⚠️");
+      }
+    });
+  }, [wxData]);
 
   // ── Bildirim tespiti
   useEffect(() => {
@@ -1432,6 +1463,10 @@ function App() {
   const members = fData.members || {};
   const memberList = Object.values(members).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
   const myMember = myUid ? (members[myUid] || { uid: myUid, name: userProfile?.name || "?" }) : null;
+  const memberColor = uid => {
+    const idx = memberList.findIndex(m => String(m.uid) === String(uid));
+    return idx >= 0 ? MEMBER_COLORS[idx % MEMBER_COLORS.length] : "#94A3B8";
+  };
 
   // ── Türetilmiş gezi verileri
   const activeTripMeta = fData?.meta || {};
@@ -1444,6 +1479,7 @@ function App() {
   const packing = Object.values(TD.packing || {}).sort((a, b) => (a.ts || 0) - (b.ts || 0));
   const notes = Object.values(TD.notes || {}).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const budget = TD.budget || null;
+  const placeComments = TD.placeComments || {};
   const allCities = allCitiesNow;
   const customCities = TD.cities || {};
   const activeCityObj = allCities.find(c => c.id === city) || allCities[0];
@@ -1479,8 +1515,7 @@ function App() {
   const headerTitle =
     tab === "rota" ? `${activeCityObj?.emoji || ""} ${activeCityObj?.name || ""}` :
     tab === "plan" ? "📅 Plan" :
-    tab === "masraf" ? "💰 Masraf" :
-    tab === "anket" ? "🗳️ Anketler" : "🛠️ Araçlar";
+    tab === "masraf" ? "💰 Masraf" : "🛠️ Araçlar";
 
   return (
     <div style={{maxWidth:520,margin:"0 auto",background:"var(--bg)",minHeight:"100vh",paddingBottom:130}}>
@@ -1539,22 +1574,33 @@ function App() {
         )}
 
         {/* Hava */}
-        <div className="card" style={{margin:"14px 18px",padding:"12px 16px"}}>
-          <div className="sec-title" style={{margin:"0 0 8px"}}>5 Günlük Hava Durumu</div>
-          <div style={{display:"flex",gap:5}}>
-            {[0,1,2,3,4].map(i => {
-              const d = wxData?.daily;
-              const dt = d ? new Date(d.time[i]) : null;
-              return (
-                <div key={i} className="wx-day">
-                  <div style={{fontSize:9,fontWeight:800,color:"var(--muted)",marginBottom:2}}>{i === 0 ? "Bugün" : dt ? DAYS[dt.getDay()] : "…"}</div>
-                  <div style={{fontSize:18,margin:"2px 0"}}>{d ? (WMO[d.weathercode[i]] || "🌡️") : "⏳"}</div>
-                  <div style={{fontSize:12,fontWeight:800,color:"var(--pri)"}}>{d ? Math.round(d.temperature_2m_max[i]) + "°" : "—"}</div>
-                  <div style={{fontSize:9,color:"var(--muted)"}}>{d ? Math.round(d.temperature_2m_min[i]) + "°" : "—"}</div>
-                </div>
-              );
-            })}
+        <div className="card tap" style={{margin:"14px 18px",padding:"12px 16px"}} onClick={() => setWxExpanded(x => !x)}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom: wxExpanded ? 10 : 0}}>
+            <div className="sec-title" style={{margin:0}}>🌤️ Hava Durumu</div>
+            {wxData?.daily ? (
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13}}>
+                <span>{WMO[wxData.daily.weathercode[0]] || "🌡️"}</span>
+                <span style={{fontWeight:800,color:"var(--pri)"}}>{Math.round(wxData.daily.temperature_2m_max[0])}°</span>
+                <span style={{color:"var(--muted)",fontSize:10}}>{wxExpanded ? "▲" : "▼"}</span>
+              </div>
+            ) : <span style={{fontSize:11,color:"var(--muted)"}}>⏳</span>}
           </div>
+          {wxExpanded && (
+            <div style={{display:"flex",gap:5}}>
+              {[0,1,2,3,4].map(i => {
+                const d = wxData?.daily;
+                const dt = d ? new Date(d.time[i]) : null;
+                return (
+                  <div key={i} className="wx-day">
+                    <div style={{fontSize:9,fontWeight:800,color:"var(--muted)",marginBottom:2}}>{i === 0 ? "Bugün" : dt ? DAYS[dt.getDay()] : "…"}</div>
+                    <div style={{fontSize:18,margin:"2px 0"}}>{d ? (WMO[d.weathercode[i]] || "🌡️") : "⏳"}</div>
+                    <div style={{fontSize:12,fontWeight:800,color:"var(--pri)"}}>{d ? Math.round(d.temperature_2m_max[i]) + "°" : "—"}</div>
+                    <div style={{fontSize:9,color:"var(--muted)"}}>{d ? Math.round(d.temperature_2m_min[i]) + "°" : "—"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Aksiyonlar */}
@@ -1647,6 +1693,61 @@ function App() {
                           onChange={e => handlePhoto(p.id, e.target.files[0])}/>
                       </>}
                     </div>
+                    {/* Yorumlar */}
+                    {(() => {
+                      const coms = Object.values(placeComments[p.id] || {}).sort((a,b) => (a.ts||0)-(b.ts||0));
+                      const isOpen = openComments[p.id];
+                      return (
+                        <div style={{marginTop:8,borderTop:"1px solid var(--border)",paddingTop:7}}>
+                          <div className="tap" style={{fontSize:11,fontWeight:700,color:"var(--muted)",display:"inline-flex",alignItems:"center",gap:4}}
+                            onClick={() => setOpenComments(c => ({...c, [p.id]: !c[p.id]}))}>
+                            💬 {coms.length > 0 ? `${coms.length} yorum` : "Yorum yaz"} {isOpen ? "▲" : "▼"}
+                          </div>
+                          {isOpen && (
+                            <div style={{marginTop:8}}>
+                              {coms.map(c => (
+                                <div key={c.id} style={{display:"flex",gap:8,marginBottom:8,alignItems:"flex-start"}}>
+                                  <div style={{width:22,height:22,borderRadius:"50%",background:memberColor(c.by),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>
+                                    {(mName(c.by)||"?")[0]}
+                                  </div>
+                                  <div style={{flex:1,background:"var(--surface-2)",borderRadius:10,padding:"6px 10px"}}>
+                                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                                      <span style={{fontSize:11,fontWeight:700,color:memberColor(c.by)}}>{mName(c.by)}</span>
+                                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                                        <span style={{fontSize:10,color:"var(--muted)"}}>{fmtTime(c.ts)}</span>
+                                        {c.by === myUid && <div className="tap" style={{fontSize:10,color:"var(--red)",fontWeight:800}} onClick={() => wr(`placeComments/${p.id}/${c.id}`, null)}>✕</div>}
+                                      </div>
+                                    </div>
+                                    <div style={{fontSize:13,lineHeight:1.4}}>{c.text}</div>
+                                  </div>
+                                </div>
+                              ))}
+                              <div style={{display:"flex",gap:6,marginTop:4}}>
+                                <input value={commentInputs[p.id] || ""} placeholder="Bir şey yaz…"
+                                  style={{flex:1,padding:"7px 10px",fontSize:12,borderRadius:10}}
+                                  onChange={e => setCommentInputs(ci => ({...ci, [p.id]: e.target.value}))}
+                                  onKeyDown={e => {
+                                    if (e.key !== "Enter") return;
+                                    const txt = (commentInputs[p.id] || "").trim();
+                                    if (!txt) return;
+                                    const id = newId();
+                                    wr(`placeComments/${p.id}/${id}`, {id, text:txt, by:myUid, ts:Date.now()});
+                                    setCommentInputs(ci => ({...ci, [p.id]: ""}));
+                                  }}/>
+                                <button className="tap" style={{background:"var(--acc)",color:"#fff",border:"none",padding:"7px 12px",borderRadius:10,fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}
+                                  onClick={() => {
+                                    const txt = (commentInputs[p.id] || "").trim();
+                                    if (!txt) return;
+                                    const id = newId();
+                                    wr(`placeComments/${p.id}/${id}`, {id, text:txt, by:myUid, ts:Date.now()});
+                                    setCommentInputs(ci => ({...ci, [p.id]: ""}));
+                                  }}>Gönder</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10,flexWrap:"wrap"}}>
                       <a href={p.url || `https://maps.google.com/?q=${encodeURIComponent(p.name + " " + (activeCityObj?.name || ""))}`} target="_blank" rel="noreferrer"
                         style={{fontSize:11,color:"var(--acc)",fontWeight:800,background:"var(--acc-soft)",padding:"4px 10px",borderRadius:8,textDecoration:"none"}}>HARİTADA GÖR →</a>
@@ -1706,12 +1807,28 @@ function App() {
               const byDay = {};
               assigned.forEach(p => { (byDay[pDay(p)] = byDay[pDay(p)] || []).push(p); });
               return Object.keys(byDay).map(Number).sort((a, b) => a - b).map(d => (
-                <div key={d} className="card">
-                  <div style={{fontWeight:800,fontSize:15,marginBottom:10,color:"var(--pri)"}}>📅 {d}. Gün
-                    <span style={{fontSize:11,color:"var(--muted)",fontWeight:600}}> · {byDay[d].length} mekan</span></div>
+                <div key={d} className="card"
+                  onDragOver={e => { e.preventDefault(); setDragOverDay(d); }}
+                  onDragLeave={() => setDragOverDay(null)}
+                  onDrop={e => {
+                    e.preventDefault();
+                    if (dragPlaceId && pDay({id: dragPlaceId}) !== d) wr(`placeDays/${dragPlaceId}`, d);
+                    setDragPlaceId(null); setDragOverDay(null);
+                  }}
+                  style={{outline: dragOverDay === d ? "2px solid var(--acc)" : "none", transition:"outline .15s"}}>
+                  <div style={{fontWeight:800,fontSize:15,marginBottom:10,color:"var(--pri)",display:"flex",alignItems:"center",gap:8}}>
+                    📅 {d}. Gün
+                    <span style={{fontSize:11,color:"var(--muted)",fontWeight:600}}>{byDay[d].length} mekan</span>
+                    {dragOverDay === d && <span style={{fontSize:11,color:"var(--acc)",fontWeight:700}}>Buraya bırak →</span>}
+                  </div>
                   {byDay[d].map(p => (
-                    <div key={p.id} className="stat-row">
+                    <div key={p.id} className="stat-row"
+                      draggable="true"
+                      onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDragPlaceId(p.id); }}
+                      onDragEnd={() => { setDragPlaceId(null); setDragOverDay(null); }}
+                      style={{cursor:"grab", opacity: dragPlaceId === p.id ? 0.5 : 1, background: dragPlaceId === p.id ? "var(--surface-2)" : "transparent", borderRadius:8, paddingLeft:6}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                        <span style={{color:"var(--muted)",fontSize:16,cursor:"grab"}}>⠿</span>
                         <div className={`check tap${visited[p.id] ? " on" : ""}`} style={{width:22,height:22,borderRadius:7}}
                           onClick={() => wr(`visited/${p.id}`, !visited[p.id])}>{visited[p.id] && <span style={{fontSize:12}}>✓</span>}</div>
                         <div style={{minWidth:0}}>
@@ -1821,6 +1938,25 @@ function App() {
             </> : <div style={{textAlign:"center",fontSize:13,fontWeight:600,opacity:.85}}>🎯 Bütçe belirlemek için dokun</div>}
           </div>
 
+          {/* Bütçe uyarısı + öneri */}
+          {budget && budgetPct >= 70 && (() => {
+            const remaining = budget.amount - budgetSpent;
+            const unvisited = allCities.flatMap(c =>
+              [...(STATIC_PLACES[c.id]||[]), ...Object.values(TD.customPlaces||{}).filter(p => p.city === c.id)]
+            ).filter(p => !visited[p.id]);
+            return (
+              <div style={{background:"rgba(228,84,63,.06)",borderRadius:16,padding:"14px 16px",marginBottom:14,border:"1.5px solid rgba(228,84,63,.2)"}}>
+                <div style={{fontWeight:800,fontSize:13,color:"var(--red)",marginBottom:6}}>
+                  ⚠️ Bütçenin %{Math.round(budgetPct)}'i kullanıldı
+                </div>
+                <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.6}}>
+                  Kalan: <b>{SYM[budget.currency]||""}{remaining.toFixed(0)} {budget.currency}</b>
+                  {unvisited.length > 0 && <> · Henüz ziyaret edilmemiş <b>{unvisited.length}</b> mekan var — planı gözden geçirmeyi düşün.</>}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Denge */}
           <div className="card">
             <div className="sec-title">📊 Denge</div>
@@ -1834,7 +1970,10 @@ function App() {
               );
               return (
                 <div key={pid} style={{padding:"11px 0",borderBottom:i < participants.length-1 ? "1px solid #F5F0E8" : "none"}}>
-                  <div style={{fontWeight:800,fontSize:15,marginBottom:7}}>{mName(pid)}{pid === myUid ? " (sen)" : ""}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                    <div style={{width:26,height:26,borderRadius:"50%",background:memberColor(pid),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{mName(pid)[0]}</div>
+                    <div style={{fontWeight:800,fontSize:15}}>{mName(pid)}{pid === myUid ? " (sen)" : ""}</div>
+                  </div>
                   {hE || hT || hU ? (
                     <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                       {hE && pill(bE, "€", 2)}{hT && pill(bT, "₺", 0)}{hU && pill(bU, "$", 2)}
@@ -1934,7 +2073,7 @@ function App() {
               return (
                 <div key={pid} className="stat-row">
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{width:28,height:28,borderRadius:"50%",background:"var(--pri)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{nm[0]}</div>
+                    <div style={{width:28,height:28,borderRadius:"50%",background:memberColor(pid),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{nm[0]}</div>
                     <span style={{fontWeight:600}}>{nm}</span>
                   </div>
                   <span style={{fontWeight:800,fontSize:15}}>€{paid.toFixed(2)}</span>
@@ -1942,59 +2081,55 @@ function App() {
               );
             })}
           </div>
+
+          {/* Gezi Özeti */}
+          <div className="card">
+            <div className="sec-title">📋 Gezi Özeti</div>
+            {(() => {
+              const euExps = expenses.filter(e => e.currency === "EUR" && !e.isSettlement);
+              const total = euExps.reduce((s,e) => s+(parseFloat(e.amount)||0), 0);
+              if (!total) return <div style={{fontSize:12,color:"var(--muted)",padding:"6px 0"}}>Henüz masraf yok.</div>;
+              const catMap = {};
+              EXP_CATS.forEach(c => { catMap[c.id] = 0; });
+              euExps.forEach(e => { catMap[e.category] = (catMap[e.category]||0)+(parseFloat(e.amount)||0); });
+              const topCat = EXP_CATS.reduce((a,b) => catMap[a.id] >= catMap[b.id] ? a : b);
+              const topSpenderPid = participants.length ? participants.reduce((a,b) => {
+                const aP = euExps.filter(e=>String(e.paidBy)===a).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+                const bP = euExps.filter(e=>String(e.paidBy)===b).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+                return aP >= bP ? a : b;
+              }) : null;
+              return (
+                <>
+                  <div className="stat-row">
+                    <span style={{fontSize:13,color:"var(--muted)"}}>Toplam (EUR)</span>
+                    <span style={{fontWeight:800,fontSize:16,color:"var(--pri)"}}>€{total.toFixed(2)}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span style={{fontSize:13,color:"var(--muted)"}}>Kişi başı</span>
+                    <span style={{fontWeight:800,fontSize:14}}>€{(total/(memberList.length||1)).toFixed(2)}</span>
+                  </div>
+                  {catMap[topCat.id] > 0 && (
+                    <div className="stat-row">
+                      <span style={{fontSize:13,color:"var(--muted)"}}>En çok harcama</span>
+                      <span style={{fontWeight:700,fontSize:13}}>{topCat.emoji} {topCat.name} — €{catMap[topCat.id].toFixed(2)}</span>
+                    </div>
+                  )}
+                  {topSpenderPid && (
+                    <div className="stat-row" style={{borderBottom:"none"}}>
+                      <span style={{fontSize:13,color:"var(--muted)"}}>En çok ödeyen</span>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{width:22,height:22,borderRadius:"50%",background:memberColor(topSpenderPid),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800}}>{mName(topSpenderPid)[0]}</div>
+                        <span style={{fontWeight:700,fontSize:13}}>{mName(topSpenderPid)}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
         </div>}
       </>}
 
-      {/* ════ ANKET ════ */}
-      {tab === "anket" && (
-        <div style={{padding:18}}>
-          <button className="btn-pri tap" style={{marginBottom:18}} onClick={() => setShowPollCreate(true)}>+ Yeni Anket Aç</button>
-          {polls.length === 0 && <div className="empty"><div className="big">🗳️</div>Henüz anket yok. İlk anketi sen aç!</div>}
-          {polls.map(poll => {
-            const votes = poll.votes || {};
-            const totalVotes = votedAny(votes);
-            const closed = pollClosed(poll);
-            return (
-              <div key={poll.id} className="card">
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                  <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>{poll.question}</div>
-                  {closed && <span className="badge" style={{background:"rgba(209,77,63,.1)",color:"var(--red)"}}>Sona erdi</span>}
-                  {!closed && poll.multi && <span className="badge">Çoklu seçim</span>}
-                </div>
-                <div style={{fontSize:11,color:"var(--muted)",marginBottom:14}}>
-                  {mName(poll.createdBy)} · {totalVotes} oy
-                  {poll.deadline && !closed && <span> · ⏳ {fmtTime(poll.deadline)}'e kadar</span>}
-                </div>
-                {(poll.options || []).map((opt, oi) => {
-                  const vc = optVotes(votes, oi);
-                  const pct = totalVotes ? Math.round(vc/totalVotes*100) : 0;
-                  const mine = myVoted(poll, oi);
-                  return (
-                    <div key={oi} className={`poll-opt${closed ? " closed" : " tap"}${mine ? " voted" : ""}`}
-                      onClick={() => {
-                        if (closed) return;
-                        if (poll.multi) wr(`polls/${poll.id}/votes/${myUid}/${oi}`, mine ? null : true);
-                        else wr(`polls/${poll.id}/votes/${myUid}`, oi);
-                      }}>
-                      <div className="poll-bar" style={{width:totalVotes ? `${pct}%` : "0%"}}/>
-                      <div style={{position:"relative",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <span style={{fontWeight:mine?700:500,fontSize:14}}>{mine ? "✓ " : ""}{opt}</span>
-                        <span style={{fontWeight:800,fontSize:13,color:"var(--pri)"}}>{totalVotes ? `${pct}%` : ""}</span>
-                      </div>
-                      {totalVotes > 0 && <div style={{fontSize:10,color:"var(--muted)",marginTop:4,position:"relative"}}>{vc} oy</div>}
-                    </div>
-                  );
-                })}
-                {poll.createdBy === myUid && (
-                  <div style={{marginTop:10,display:"flex",justifyContent:"flex-end"}}>
-                    <div className="tap" style={{fontSize:11,color:"var(--red)",fontWeight:700}} onClick={() => wr(`polls/${poll.id}`, null)}>Anketi Sil</div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {/* ════ ARAÇLAR ════ */}
       {tab === "daha" && (
@@ -2056,9 +2191,6 @@ function App() {
           {/* Araçlar */}
           <div className="card">
             <div className="sec-title">🛠️ Araçlar</div>
-            <div className="list-row tap" onClick={() => setShowConv(true)}>
-              <span style={{fontSize:20}}>💱</span><div style={{flex:1,fontWeight:700,fontSize:14}}>Döviz Çevirici</div><span style={{color:"var(--muted)"}}>→</span>
-            </div>
             <div className="list-row tap" onClick={() => getLocation(true)}>
               <span style={{fontSize:20}}>📡</span>
               <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>Konumumu Paylaş</div>
@@ -2080,15 +2212,91 @@ function App() {
           {/* Üyeler */}
           <div className="card">
             <div className="sec-title">👥 Üyeler ({memberList.length})</div>
-            {memberList.map(mb => (
-              <div key={mb.uid} className="stat-row">
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:28,height:28,borderRadius:"50%",background:"var(--pri)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{mb.name[0]}</div>
-                  <span style={{fontWeight:600,fontSize:14}}>{mb.name}{mb.uid === myUid ? " (sen)" : ""}</span>
+            {memberList.map((mb, mbi) => {
+              const color = MEMBER_COLORS[mbi % MEMBER_COLORS.length];
+              const isOwner = activeTripMeta?.ownerUid === myUid;
+              return (
+                <div key={mb.uid} className="stat-row">
+                  <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+                    <div style={{width:34,height:34,borderRadius:"50%",background:color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,flexShrink:0,boxShadow:`0 2px 8px ${color}55`}}>
+                      {(mb.name||"?")[0]}
+                    </div>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:14}}>{mb.name}{mb.uid === myUid ? " (sen)" : ""}</div>
+                      <div style={{fontSize:10,color:"var(--muted)"}}>{mb.role === "owner" ? "👑 Sahip" : "👤 Üye"}</div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    {mb.loc && Date.now() - (mb.loc.ts || 0) < 12*3600*1000 && <span className="badge" style={{background:"rgba(123,94,167,.1)",color:"#7B5EA7"}}>📡</span>}
+                    {isOwner && mb.uid !== myUid && (
+                      <button className="tap" style={{fontSize:10,fontWeight:700,color:"var(--red)",background:"rgba(228,84,63,.08)",border:"none",padding:"4px 8px",borderRadius:8,cursor:"pointer"}}
+                        onClick={() => { if(confirm(`${mb.name} geziden çıkarılsın mı?`)) { wr(`members/${mb.uid}`, null); toast(`${mb.name} geziden çıkarıldı.`, "👋"); } }}>
+                        Çıkar
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {mb.loc && Date.now() - (mb.loc.ts || 0) < 12*3600*1000 && <span className="badge" style={{background:"rgba(123,94,167,.1)",color:"#7B5EA7"}}>📡 Konum açık</span>}
-              </div>
-            ))}
+              );
+            })}
+          </div>
+
+          {/* Anketler */}
+          <div className="card">
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div className="sec-title" style={{margin:0}}>🗳️ Anketler ({polls.length})</div>
+              <button className="tap" style={{fontSize:12,fontWeight:700,color:"var(--acc)",background:"var(--acc-soft)",border:"none",padding:"5px 12px",borderRadius:10,cursor:"pointer"}}
+                onClick={() => setShowPollCreate(true)}>+ Yeni</button>
+            </div>
+            {polls.length === 0 && <div style={{fontSize:12,color:"var(--muted)",padding:"8px 0"}}>Henüz anket yok.</div>}
+            {polls.slice(0,3).map(poll => {
+              const votes = poll.votes || {};
+              const totalVotes = Object.keys(votes).length;
+              const closed = pollClosed(poll);
+              return (
+                <div key={poll.id} style={{background:"var(--surface-2)",borderRadius:12,padding:"10px 12px",marginBottom:8}}>
+                  <div style={{fontWeight:700,fontSize:13,marginBottom:6}}>{poll.question}</div>
+                  {(poll.options||[]).map((opt, oi) => {
+                    const vc = optVotes(votes, oi);
+                    const pct = totalVotes ? Math.round(vc/totalVotes*100) : 0;
+                    const mine = myVoted(poll, oi);
+                    return (
+                      <div key={oi} className={`poll-opt${closed?"":" tap"}${mine?" voted":""}`} style={{padding:"7px 10px",marginBottom:4}}
+                        onClick={() => { if(closed) return; if(poll.multi) wr(`polls/${poll.id}/votes/${myUid}/${oi}`, mine?null:true); else wr(`polls/${poll.id}/votes/${myUid}`, oi); }}>
+                        <div className="poll-bar" style={{width:totalVotes?`${pct}%`:"0%"}}/>
+                        <div style={{position:"relative",display:"flex",justifyContent:"space-between",fontSize:12}}>
+                          <span style={{fontWeight:mine?700:500}}>{mine?"✓ ":""}{opt}</span>
+                          {totalVotes > 0 && <span style={{fontWeight:700,color:"var(--pri)"}}>{pct}%</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                    <span style={{fontSize:10,color:"var(--muted)"}}>{mName(poll.createdBy)} · {totalVotes} oy{closed?" · Sona erdi":""}</span>
+                    {poll.createdBy === myUid && <div className="tap" style={{fontSize:10,color:"var(--red)",fontWeight:700}} onClick={() => wr(`polls/${poll.id}`, null)}>Sil</div>}
+                  </div>
+                </div>
+              );
+            })}
+            {polls.length > 3 && <div style={{fontSize:12,color:"var(--muted)",textAlign:"center",paddingTop:4}}>+ {polls.length-3} anket daha</div>}
+          </div>
+
+          {/* Döviz çevirici (inline) */}
+          <div className="card">
+            <div className="sec-title">💱 Döviz Çevirici</div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <input type="number" value={convAmt} style={{flex:1}} onChange={e => setConvAmt(e.target.value)} placeholder="100"/>
+              <select value={convBase} onChange={e => setConvBase(e.target.value)} style={{width:"auto"}}>
+                {Object.keys(rates).map(c => <option key={c} value={c}>{SYM[c]||c} {c}</option>)}
+              </select>
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {convResult.map(({cur, val}) => (
+                <div key={cur} style={{flex:1,minWidth:80,background:"var(--surface-2)",borderRadius:12,padding:"10px 12px",textAlign:"center"}}>
+                  <div style={{fontSize:11,color:"var(--muted)",fontWeight:700}}>{SYM[cur]||cur} {cur}</div>
+                  <div style={{fontSize:17,fontWeight:800,color:"var(--pri)",marginTop:2}}>{val}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="tap" onClick={doLogout} style={{textAlign:"center",fontSize:13,color:"var(--red)",fontWeight:700,padding:14}}>Çıkış Yap</div>
@@ -2105,7 +2313,7 @@ function App() {
 
       {/* ── ALT NAVİGASYON ── */}
       <div className="nav-bar">
-        {[["rota","🗺️","ROTA"],["plan","📅","PLAN"],["masraf","💳","MASRAF"],["anket","🗳️","ANKET"],["daha","🛠️","ARAÇLAR"]].map(([k, ic, lb]) => (
+        {[["rota","🗺️","ROTA"],["plan","📅","PLAN"],["masraf","💳","MASRAF"],["daha","🛠️","ARAÇLAR"]].map(([k, ic, lb]) => (
           <div key={k} className={`nav-item tap${tab === k ? " on" : ""}`} onClick={() => setTab(k)}>
             <div className="ic">{ic}</div><div>{lb}</div>
           </div>
@@ -2138,33 +2346,6 @@ function App() {
         </Modal>
       )}
 
-      {showConv && (
-        <Modal onClose={() => setShowConv(false)}>
-          <ModalHead title="💱 Döviz Çevirici" onClose={() => setShowConv(false)}/>
-          <div style={{display:"flex",gap:10,marginBottom:20}}>
-            <div style={{flex:2}}>
-              <label className="lbl">Tutar</label>
-              <input type="number" value={convAmt} onChange={e => setConvAmt(e.target.value)}/>
-            </div>
-            <div>
-              <label className="lbl">Para Birimi</label>
-              <select value={convBase} onChange={e => setConvBase(e.target.value)} style={{width:"auto"}}>
-                {Object.keys(rates).map(c => <option key={c} value={c}>{SYM[c] || c} {c}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{background:"linear-gradient(135deg,var(--pri),var(--pri2))",borderRadius:20,padding:20,color:"#fff"}}>
-            <div style={{fontSize:10,fontWeight:800,opacity:.6,marginBottom:12,textTransform:"uppercase",letterSpacing:1}}>Çeviri Sonuçları</div>
-            {convResult.map(({ cur, val }) => (
-              <div key={cur} className="conv-row">
-                <span style={{fontSize:14,fontWeight:600,opacity:.85}}>{SYM[cur] || cur} {cur}</span>
-                <span style={{fontSize:20,fontWeight:800}}>{val}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{fontSize:11,color:"var(--muted)",textAlign:"center",marginTop:8}}>Kurlar open.er-api.com'dan anlık</div>
-        </Modal>
-      )}
 
       {showBudget && (
         <Modal onClose={() => setShowBudget(false)}>

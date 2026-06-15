@@ -1035,6 +1035,14 @@ function App() {
     } catch { return location.href + "?join=" + activeTrip; }
   };
 
+  // ── Davet linki: kullanıcı ve profil hazır olunca katıl
+  useEffect(() => {
+    if (!pendingJoin || !user || !userProfile) return;
+    const id = pendingJoin;
+    setPendingJoin(null);
+    joinTrip(id);
+  }, [pendingJoin, user?.uid, userProfile?.name]);
+
   // ── Gezi sayım bildirimleri
   useEffect(() => {
     const sd = fData?.meta?.startDate;
@@ -1404,19 +1412,6 @@ function App() {
             {user.email ? `${user.email} — Çıkış yap` : "Çıkış yap"}
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // ── Davet linki bekleniyorsa otomatik katıl
-  if (pendingJoin) {
-    joinTrip(pendingJoin);
-    setPendingJoin(null);
-    return (
-      <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:18,background:"linear-gradient(135deg,#EFF6FF,#E0E7FF)"}}>
-        <div className="login-logo">🎉</div>
-        <div className="loadbar"><div/></div>
-        <div style={{fontSize:13,fontWeight:600,color:"#64748B"}}>Geziye katılınıyor…</div>
       </div>
     );
   }

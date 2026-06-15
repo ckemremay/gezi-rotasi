@@ -321,7 +321,7 @@ firebase.initializeApp(firebaseConfig);
    Kurallar: { "rules": { ".read": "auth != null", ".write": "auth != null" } }
    Google girişi file:// üzerinden çalışmaz; GitHub Pages / localhost gerekir. */
 window._db=firebase.database();
-window._joinParam=(()=>{try{return new URL(location.href).searchParams.get('join');}catch{return null;}})();
+window._joinParam=(()=>{try{const p=new URL(location.href).searchParams.get('join');if(p){sessionStorage.setItem('gezi_pending_join',p);return p;}return sessionStorage.getItem('gezi_pending_join');}catch{return null;}})();
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
@@ -999,11 +999,12 @@ function App() {
       updates[`trips/${tripId}/members/${myUid}`] = memberEntry;
       updates[`users/${myUid}/trips/${tripId}`] = userTripEntry;
       await window._db.ref().update(updates);
-      // URL'den join parametresini temizle
+      // URL ve sessionStorage'dan join parametresini temizle
+      sessionStorage.removeItem('gezi_pending_join');
       try { const u = new URL(location.href); u.searchParams.delete("join"); history.replaceState({}, "", u.toString()); } catch {}
       switchTrip(tripId);
       toast(`"${meta.name}" gezisine katıldın!`, "🎉");
-    } catch(e) { toast("Geziye katılırken hata oluştu.", "❌"); }
+    } catch(e) { console.error("joinTrip error:", e); toast("Geziye katılırken hata: " + (e.message || e), "❌"); }
   };
   const leaveTrip = async (tripId) => {
     const updates = {};

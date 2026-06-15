@@ -1036,12 +1036,33 @@ function App() {
     } catch { return location.href + "?join=" + activeTrip; }
   };
 
-  // ── Davet linki: kullanıcı ve profil hazır olunca katıl
+  // ── Davet linki: kullanıcı ve profil hazır olunca katıl (closure bağımsız)
   useEffect(() => {
-    if (!pendingJoin || !user || !userProfile) return;
-    const id = pendingJoin;
+    if (!pendingJoin || !user?.uid || !userProfile?.name) return;
+    const tripId = pendingJoin;
+    const uid = user.uid;
+    const uName = userProfile.name;
+    const uEmail = user.email || "";
     setPendingJoin(null);
-    joinTrip(id);
+    sessionStorage.removeItem('gezi_pending_join');
+    (async () => {
+      try {
+        const snap = await window._db.ref(`trips/${tripId}/meta`).once("value");
+        const meta = snap.val();
+        if (!meta) { toast("Geçersiz davet linki.", "❌"); return; }
+        const updates = {};
+        updates[`trips/${tripId}/members/${uid}`] = { uid, name: uName, email: uEmail, role: "editor", joinedAt: Date.now() };
+        updates[`users/${uid}/trips/${tripId}`] = { ...meta, role: "editor" };
+        await window._db.ref().update(updates);
+        try { const u = new URL(location.href); u.searchParams.delete("join"); history.replaceState({}, "", u.toString()); } catch {}
+        localStorage.setItem("gezi_trip", tripId);
+        setActiveTrip(tripId);
+        toast(`"${meta.name}" gezisine katıldın!`, "🎉");
+      } catch(e) {
+        console.error("joinTrip (useEffect) error:", e);
+        toast("Geziye katılırken hata: " + (e.message || String(e)), "❌");
+      }
+    })();
   }, [pendingJoin, user?.uid, userProfile?.name]);
 
   // ── Gezi sayım bildirimleri

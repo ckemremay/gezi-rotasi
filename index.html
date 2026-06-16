@@ -515,30 +515,46 @@ function Modal({ onClose, children }) {
   );
 }
 
+// Wikipedia resim isteği kuyruğu — eş zamanlı istek sayısını sınırlar
+const _wikiQueue = { tasks: [], running: 0, MAX: 3 };
+function _wikiEnqueue(fn) {
+  return new Promise((resolve, reject) => {
+    _wikiQueue.tasks.push({ fn, resolve, reject });
+    _wikiDrain();
+  });
+}
+function _wikiDrain() {
+  while (_wikiQueue.running < _wikiQueue.MAX && _wikiQueue.tasks.length) {
+    const { fn, resolve, reject } = _wikiQueue.tasks.shift();
+    _wikiQueue.running++;
+    fn().then(resolve, reject).finally(() => {
+      _wikiQueue.running--;
+      // Kısa gecikme ile sonraki isteği başlat (rate limit önlemi)
+      setTimeout(_wikiDrain, 200);
+    });
+  }
+}
+
 function PlaceImage({ name }) {
   const [src, setSrc] = React.useState(null);
   React.useEffect(() => {
     if (!name) return;
     let cancelled = false;
-    // Step 1: fuzzy search to find the best matching Wikipedia article title
-    fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name)}&srlimit=3&format=json&origin=*`)
-      .then(r => r.json())
-      .then(d => {
-        if (cancelled) return;
-        const results = d.query?.search || [];
-        if (!results.length) return;
-        // Pick first result title, then fetch its thumbnail
-        const title = results[0].title;
-        return fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
-      })
-      .then(r => r && r.json())
-      .then(d => {
-        if (cancelled || !d) return;
-        const pages = Object.values(d.query?.pages || {});
-        const thumb = pages[0]?.thumbnail?.source;
-        if (thumb) setSrc(thumb);
-      })
-      .catch(() => {});
+    _wikiEnqueue(async () => {
+      if (cancelled) return;
+      const r1 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name)}&srlimit=3&format=json&origin=*`);
+      const d1 = await r1.json();
+      if (cancelled) return;
+      const results = d1.query?.search || [];
+      if (!results.length) return;
+      const title = results[0].title;
+      const r2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
+      const d2 = await r2.json();
+      if (cancelled) return;
+      const pages = Object.values(d2.query?.pages || {});
+      const thumb = pages[0]?.thumbnail?.source;
+      if (thumb) setSrc(thumb);
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [name]);
   if (!src) return null;
@@ -1700,7 +1716,10 @@ function App() {
       <Toast toasts={toasts}/>
 
       {/* ── HERO HEADER ── */}
-      <div className="header">
+      <div className="header" style={activeTripMeta.coverImg ? {
+        backgroundImage:`linear-gradient(160deg,rgba(15,35,20,.72) 0%,rgba(15,35,20,.45) 60%,rgba(15,35,20,.72) 100%),url(${activeTripMeta.coverImg})`,
+        backgroundSize:"cover", backgroundPosition:"center"
+      } : {}}>
         <div className="hero-top">
           <div>
             <div className="eyebrow">{activeTripMeta.emoji || "🧭"} {activeTripName} Gezisi</div>
@@ -2835,6 +2854,26 @@ function App() {
             setCity(id);
             setShowAddCity(false);
             setNewCity({ name:"", emoji:"📍" });
+            // Şehrin ikonik Wikipedia görselini çek → gezi kapak fotoğrafı olarak kaydet
+            (async () => {
+              try {
+                // Önce geo-search: şehir koordinatlarına en yakın popüler Wikipedia makalesi
+                const geoUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=10000&ggslimit=5&prop=pageimages|info&inprop=url&format=json&pithumbsize=1200&pilimit=5&origin=*`;
+                const geoData = await fetch(geoUrl).then(r => r.json());
+                const geoPages = Object.values(geoData.query?.pages || {});
+                // Thumbnail'i olan ilk sayfayı bul
+                const geoHit = geoPages.find(p => p.thumbnail?.source);
+                if (geoHit) {
+                  wr(`trips/${activeTrip}/meta/coverImg`, geoHit.thumbnail.source);
+                  return;
+                }
+                // Geo-search sonuç vermezse şehir adıyla doğrudan ara
+                const searchData = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(cityName)}&prop=pageimages&format=json&pithumbsize=1200&origin=*`).then(r => r.json());
+                const searchPages = Object.values(searchData.query?.pages || {});
+                const thumb = searchPages.find(p => p.thumbnail?.source)?.thumbnail?.source;
+                if (thumb) wr(`trips/${activeTrip}/meta/coverImg`, thumb);
+              } catch {}
+            })();
             // Her iki kategoriyi paralel çek
             const GPKEY = "AIzaSyA-IcAvybYBILp5Bs5ieMVhBQvlorpLe-c";
             const fetchCat = async (types, maxResults, catType) => {

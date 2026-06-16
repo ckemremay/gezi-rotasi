@@ -428,6 +428,15 @@ const LEGACY_MEMBERS = ["Emre","Tuğçe","Erdem","Mihrap"];
 const MAX_DAYS = 9;
 const MEMBER_COLORS = ["#2563EB","#E4543F","#3E8A60","#E2A93B","#7B5EA7","#4ECDC4","#FF8C42","#45B7D1"];
 
+const PACK_TEMPLATES = [
+  { id:"summer", emoji:"☀️", name:"Yaz Tatili", items:["Pasaport","Kimlik","Kredi kartı","Nakit","Uçak bileti","Otel rezervasyonu","Güneş kremi","Güneş gözlüğü","Şapka","Mayo / Bikini","Şort (3 adet)","Tişört (5 adet)","Sandalet","Spor ayakkabı","Şarj aleti","Kulaklık","Powerbank","Makyaj çantası","İlaçlar","Antiseptik krem","Yedek gözlük / lens","Şemsiye","Havlu"] },
+  { id:"winter", emoji:"⛷️", name:"Kış / Kayak", items:["Pasaport","Kimlik","Kayak montu","Kayak pantolonu","Termal iç çamaşır (3 set)","Kazak (3 adet)","Bere","Eldiven","Atkı","Bot","Kayak gözlüğü","Güneş kremi (yüksek faktör)","Dudak koruyucu","Şarj aleti","Powerbank","Kulaklık","İlaçlar","Ağrı kesici","Kayak bileti / geçiş kartı"] },
+  { id:"business", emoji:"💼", name:"İş Seyahati", items:["Pasaport","Kimlik","Uçak bileti","Laptop","Laptop şarj aleti","Mouse","Powerbank","Kulaklık","Adaptör","Takım elbise (2 adet)","Gömlek (3 adet)","Kravat","Kemer","Kartvizit","Not defteri","Kalem","İlaçlar","Şarj aleti","Küçük el çantası"] },
+  { id:"camping", emoji:"🏕️", name:"Kamp", items:["Çadır","Uyku tulumu","Şişme mat","El feneri","Çakmak / kibrit","Çakı","Birinci yardım çantası","Su matarası","Su filtresi","Böcek kovucu sprey","Güneş kremi","Trekking ayakkabı","Yağmurluk","Termal üst","Yiyecek & atıştırmalık","Çöp poşeti","Harita","Pusula","Powerbank","Telefon şarj aleti"] },
+  { id:"sea", emoji:"🚢", name:"Tekne / Deniz", items:["Pasaport","Deniz tutması ilacı","Can yeleği","Mayo (3 adet)","Havlu","Şnorkel seti","Su geçirmez çanta","Güneş kremi","Güneş gözlüğü","Şapka","Sandalet","Değiştirme kıyafeti","Powerbank","Su geçirmez telefon kılıfı","İçecek & atıştırmalık"] },
+  { id:"tourist", emoji:"🏛️", name:"Turistik Gezi", items:["Pasaport","Kimlik","Kredi kartı","Nakit (yerel para)","Uçak bileti","Otel rezervasyonu","Şehir haritası / rehber","Rahat yürüyüş ayakkabısı (2 çift)","Sırt çantası","Powerbank","Şarj aleti","Fotoğraf makinesi","Ekstra hafıza kartı","Su şişesi","Atıştırmalık","Güneş kremi","Şapka","Yağmurluk","Müze / kart geçişi","İlaçlar","Çevrimdışı harita uygulaması","Adaptör","Yedek gözlük / lens","Küçük kilit (bavul için)"] },
+];
+
 // ── YARDIMCILAR ───────────────────────────────────────────────────────────────
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371000, p1 = lat1*Math.PI/180, p2 = lat2*Math.PI/180;
@@ -816,6 +825,7 @@ function App() {
   const [touristSel, setTouristSel] = useState(new Set());
   const [newPoll, setNewPoll] = useState(initPoll);
   const [newPack, setNewPack] = useState("");
+  const [showPackTemplates, setShowPackTemplates] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [newTrip, setNewTrip] = useState({ name:"", emoji:"✈️", startDate:"", endDate:"" });
   const [budgetForm, setBudgetForm] = useState({ amount:"", currency:"EUR" });
@@ -826,6 +836,7 @@ function App() {
   const [nearbyMode, setNearbyMode] = useState(false);
   const [nearbyResults, setNearbyResults] = useState(null);
   const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [openPlaceGroups, setOpenPlaceGroups] = useState({ tourist: true, food: true });
   const [chartCur, setChartCur] = useState("EUR");
   const [convAmt, setConvAmt] = useState("100");
   const [convBase, setConvBase] = useState("EUR");
@@ -1266,6 +1277,42 @@ function App() {
         setNearbyLoading(false);
       }
     }, () => toast("Konum izni reddedildi.", "❌"));
+  };
+
+  // ── Mekan önerileri (turistik / yemek)
+  const fetchPlaceSuggestions = async (catType) => {
+    const activeCity = allCitiesNow.find(c => c.id === city);
+    if (!activeCity?.lat) { toast("Önce bir şehir seçin.", "⚠️"); return; }
+    const { lat, lon, id: cid, name: cName } = activeCity;
+    const isFood = catType === "food";
+    const GPKEY = "AIzaSyA-IcAvybYBILp5Bs5ieMVhBQvlorpLe-c";
+    try {
+      const resp = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+        method: "POST",
+        headers: { "Content-Type":"application/json", "X-Goog-Api-Key":GPKEY,
+          "X-Goog-FieldMask":"places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.primaryTypeDisplayName" },
+        body: JSON.stringify({
+          includedTypes: isFood ? ["restaurant","cafe","bakery"] : ["tourist_attraction","museum"],
+          maxResultCount: isFood ? 10 : 15,
+          locationRestriction: { circle: { center:{ latitude:lat, longitude:lon }, radius:6000 } },
+          rankPreference: "POPULARITY"
+        })
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      const spots = (data.places||[]).map((p,i) => ({
+        id:"place_"+p.id, name:p.displayName?.text||"?",
+        desc:p.primaryTypeDisplayName?.text||"",
+        lat:p.location?.latitude, lon:p.location?.longitude,
+        rating:p.rating||null, reviewCount:p.userRatingCount||null,
+        category: catType, city: cid, sortOrder:i,
+        url:`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.displayName?.text||"")}&query_place_id=${p.id}`
+      })).filter(s => s.lat && s.lon);
+      if (spots.length > 0) {
+        setTouristSpots({ cityId:cid, cityName:cName, spots, category:catType });
+        setTouristSel(new Set(spots.map(s => s.id)));
+      } else toast("Öneri bulunamadı.", "❌");
+    } catch(err) { console.error("Places error:", err); toast("Öneriler yüklenemedi: "+(err.message||err), "❌"); }
   };
 
   // ── Bildirim izni
@@ -1735,15 +1782,17 @@ function App() {
         </div>
 
         {/* Aksiyonlar */}
-        <div style={{padding:"0 18px",display:"flex",gap:8,marginBottom:12}}>
-          <button className={`tap chip${nearbyMode ? " on" : ""}`} style={{flex:1}}
+        <div style={{padding:"0 18px",display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+          <button className={`tap chip${nearbyMode ? " on" : ""}`} style={{flex:1,minWidth:"45%"}}
             onClick={() => { if (!nearbyMode) getLocation(false); else { setNearbyMode(false); setUserLoc(null); setNearbyResults(null); setNearbyLoading(false); } }}>
             {nearbyMode ? "✕ Kapat" : "📍 Yakınımdakiler"}
           </button>
-          <button className={`tap chip${routeMode ? " on" : ""}`} style={{flex:1}}
+          <button className={`tap chip${routeMode ? " on" : ""}`} style={{flex:1,minWidth:"45%"}}
             onClick={() => { setRouteMode(p => !p); if (routeMode) setRouteIds([]); }}>
             {routeMode ? "✕ Rotayı Temizle" : "🗺️ Rota Çiz"}
           </button>
+          <button className="tap chip" style={{flex:1,minWidth:"45%"}} onClick={() => fetchPlaceSuggestions("tourist")}>🏛️ Turistik Öneriler</button>
+          <button className="tap chip" style={{flex:1,minWidth:"45%"}} onClick={() => fetchPlaceSuggestions("food")}>🍽️ Yemek & Café</button>
         </div>
 
         {/* Yakındakiler */}
@@ -1797,9 +1846,13 @@ function App() {
           </div>
         )}
 
-        {/* Mekan kartları */}
-        <div style={{padding:"0 18px"}}>
-          {cityPlaces.map(p => {
+        {/* Mekan kartları — kategoriye göre akordeon */}
+        {(() => {
+          const touristPlaces = cityPlaces.filter(p => p.category !== "food");
+          const foodPlaces    = cityPlaces.filter(p => p.category === "food");
+          const hasGroups     = foodPlaces.length > 0;
+
+          const renderCards = (places) => places.map(p => {
             const isV = !!visited[p.id];
             const photos = Object.values(placePhotos[p.id] || {});
             const routeIdx = routeIds.indexOf(p.id);
@@ -1911,8 +1964,29 @@ function App() {
                 </div>
               </div>
             );
-          })}
-        </div>
+          });
+
+          const AccordionGroup = ({ gKey, emoji, label, places }) => (
+            <div style={{marginBottom:4}}>
+              <div className="tap" onClick={() => setOpenPlaceGroups(prev => ({...prev, [gKey]: !prev[gKey]}))}
+                style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                  padding:"11px 18px",background:"var(--surface-2)",borderTop:"1px solid var(--border)",borderBottom:"1px solid var(--border)"}}>
+                <span style={{fontWeight:800,fontSize:13,color:"var(--ink-2)"}}>
+                  {emoji} {label} <span style={{fontWeight:500,color:"var(--muted)"}}>({places.length})</span>
+                </span>
+                <span style={{fontSize:14,color:"var(--muted)"}}>{openPlaceGroups[gKey] !== false ? "▲" : "▼"}</span>
+              </div>
+              {openPlaceGroups[gKey] !== false && <div style={{padding:"0 18px"}}>{renderCards(places)}</div>}
+            </div>
+          );
+
+          if (!hasGroups) return <div style={{padding:"0 18px"}}>{renderCards(cityPlaces)}</div>;
+
+          return <>
+            {touristPlaces.length > 0 && <AccordionGroup gKey="tourist" emoji="🏛️" label="Turistik Mekanlar" places={touristPlaces}/>}
+            {foodPlaces.length    > 0 && <AccordionGroup gKey="food"    emoji="🍽️" label="Yemek & Café"      places={foodPlaces}/>}
+          </>;
+        })()}
 
         {/* Harita */}
         <div style={{padding:"4px 18px 20px"}}>
@@ -2013,6 +2087,10 @@ function App() {
                 <div className="prog"><div style={{width:`${packing.length ? packing.filter(i => i.done).length / packing.length * 100 : 0}%`,background:"var(--green)"}}/></div>
               </div>
             )}
+            <button className="btn-out tap" style={{width:"100%",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
+              onClick={() => setShowPackTemplates(true)}>
+              <span style={{fontSize:16}}>📦</span> Şablon Yükle
+            </button>
             <div style={{display:"flex",gap:8,marginBottom:14}}>
               <input value={newPack} placeholder="Örn: Pasaport, adaptör, şemsiye…"
                 onChange={e => setNewPack(e.target.value)}
@@ -2110,52 +2188,98 @@ function App() {
             );
           })()}
 
-          {/* Denge */}
-          <div className="card">
-            <div className="sec-title">📊 Denge</div>
-            {participants.map((pid, i) => {
-              const bE = eurRes.bal[pid] || 0, bT = tryRes.bal[pid] || 0, bU = usdRes.bal[pid] || 0;
-              const hE = Math.abs(bE) > 0.01, hT = Math.abs(bT) > 0.01, hU = Math.abs(bU) > 0.01;
-              const pill = (v, sym, dec) => (
-                <div style={{fontSize:15,fontWeight:800,padding:"7px 11px",borderRadius:10,background:"var(--bg)",color:v >= 0 ? "var(--green)" : "var(--red)"}}>
-                  {v > 0 ? "+" : ""}{v.toFixed(dec)}{sym}
-                </div>
-              );
-              return (
-                <div key={pid} style={{padding:"11px 0",borderBottom:i < participants.length-1 ? "1px solid #F5F0E8" : "none"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
-                    <div style={{width:26,height:26,borderRadius:"50%",background:memberColor(pid),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{mName(pid)[0]}</div>
-                    <div style={{fontWeight:800,fontSize:15}}>{mName(pid)}{pid === myUid ? " (sen)" : ""}</div>
+          {/* 💸 Hesaplaşma — Splitwise tarzı */}
+          {(() => {
+            const allTxs = ["EUR","TRY","USD"].flatMap(cur => {
+              const res = cur === "EUR" ? eurRes : cur === "TRY" ? tryRes : usdRes;
+              return res.txs.map(t => ({ ...t, cur }));
+            });
+            const myOwed  = allTxs.filter(t => t.from === myUid); // ben ödeyeceğim
+            const owedMe  = allTxs.filter(t => t.to   === myUid); // bana ödeyecek
+            const allClear = allTxs.length === 0 && participants.length > 0;
+            return (
+              <div className="card" style={{padding:0,overflow:"hidden",marginBottom:14}}>
+                {/* Başlık + kişi başı özet */}
+                <div style={{padding:"16px 18px 14px",borderBottom:"1px solid var(--border)"}}>
+                  <div className="sec-title" style={{marginBottom:10}}>💸 Hesaplaşma</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {participants.map(pid => {
+                      const bE = eurRes.bal[pid]||0, bT = tryRes.bal[pid]||0, bU = usdRes.bal[pid]||0;
+                      const net = [Math.abs(bE)>0.01&&`${bE>0?"+":""}${bE.toFixed(2)}€`,
+                                   Math.abs(bT)>0.01&&`${bT>0?"+":""}${Math.round(bT)}₺`,
+                                   Math.abs(bU)>0.01&&`${bU>0?"+":""}${bU.toFixed(2)}$`].filter(Boolean);
+                      const isPos = bE>=0&&bT>=0&&bU>=0;
+                      return (
+                        <div key={pid} style={{display:"flex",alignItems:"center",gap:6,background:"var(--surface-2)",borderRadius:10,padding:"6px 10px"}}>
+                          <div style={{width:22,height:22,borderRadius:"50%",background:memberColor(pid),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{mName(pid)[0]}</div>
+                          <div>
+                            <div style={{fontSize:11,fontWeight:700,color:"var(--ink-2)"}}>{mName(pid)}{pid===myUid?" (sen)":""}</div>
+                            {net.length>0
+                              ? <div style={{fontSize:11,fontWeight:800,color:isPos?"var(--green)":"var(--red)"}}>{net.join(" · ")}</div>
+                              : <div style={{fontSize:10,color:"var(--muted)"}}>Dengede ✓</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {hE || hT || hU ? (
-                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                      {hE && pill(bE, "€", 2)}{hT && pill(bT, "₺", 0)}{hU && pill(bU, "$", 2)}
-                    </div>
-                  ) : <div style={{fontSize:12,color:"var(--muted)"}}>Dengede ✓</div>}
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Ödeme önerileri */}
-          {[{ l:"EUR", s:"€", r:eurRes }, { l:"TRY", s:"₺", r:tryRes }, { l:"USD", s:"$", r:usdRes }].map(g => g.r.txs.length > 0 && (
-            <div key={g.l} style={{background:"var(--pri)",color:"#fff",padding:18,borderRadius:18,marginBottom:14}}>
-              <div style={{fontSize:10,fontWeight:800,opacity:.6,marginBottom:10,textTransform:"uppercase",letterSpacing:1}}>{g.l} ÖDEME ÖNERİSİ</div>
-              {g.r.txs.map((t, i) => (
-                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,background:"rgba(255,255,255,.06)",padding:"10px 12px",borderRadius:12}}>
-                  <span style={{fontSize:14}}><b>{mName(t.from)}</b><span style={{opacity:.5}}> → </span><b>{mName(t.to)}</b></span>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{color:"#FFD080",fontWeight:800,fontSize:15}}>{t.amt.toFixed(2)}{g.s}</span>
-                    <button className="tap" style={{background:"#FFD080",border:"none",padding:"5px 10px",borderRadius:7,fontSize:10,fontWeight:800,color:"var(--pri)",cursor:"pointer"}}
-                      onClick={() => {
-                        const id = newId();
-                        wr(`expenses/${id}`, { id, ts: Date.now(), desc:`${mName(t.from)}→${mName(t.to)} ödeme`, amount:t.amt, currency:g.l, paidBy:t.from, splitAmong:[t.to], category:"other", city:"global", isSettlement:true });
-                      }}>Ödendi ✓</button>
+                {/* Kişisel durum bandı */}
+                {(myOwed.length>0||owedMe.length>0) && (
+                  <div style={{padding:"12px 18px",background:"#EEF2FF",borderBottom:"1px solid var(--border)"}}>
+                    <div style={{fontSize:11,fontWeight:800,color:"var(--acc)",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Senin durumun</div>
+                    {myOwed.map((t,i) => (
+                      <div key={i} style={{fontSize:13,color:"var(--red)",fontWeight:600,marginBottom:2}}>
+                        ↗ <b>{mName(t.to)}</b>'e <b>{(SYM[t.cur]||t.cur)}{t.amt.toFixed(2)}</b> ödemen gerekiyor
+                      </div>
+                    ))}
+                    {owedMe.map((t,i) => (
+                      <div key={i} style={{fontSize:13,color:"var(--green)",fontWeight:600,marginBottom:2}}>
+                        ↙ <b>{mName(t.from)}</b> sana <b>{(SYM[t.cur]||t.cur)}{t.amt.toFixed(2)}</b> ödeyecek
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          ))}
+                )}
+
+                {/* İşlem kartları */}
+                {allTxs.map((t, i) => (
+                  <div key={i} style={{padding:"14px 18px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{width:36,height:36,borderRadius:"50%",background:memberColor(t.from),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>{mName(t.from)[0]}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        <span>{mName(t.from)}</span>
+                        <span style={{color:"var(--muted)",fontSize:16}}>→</span>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:memberColor(t.to),color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{mName(t.to)[0]}</div>
+                        <span>{mName(t.to)}</span>
+                      </div>
+                      <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{t.cur} ödemesi</div>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+                      <div style={{fontWeight:900,fontSize:17,color:"var(--red)"}}>{SYM[t.cur]||t.cur}{t.amt.toFixed(2)}</div>
+                      <button className="tap" style={{background:"var(--green)",border:"none",padding:"6px 12px",borderRadius:8,fontSize:11,fontWeight:800,color:"#fff",cursor:"pointer"}}
+                        onClick={() => {
+                          const id = newId();
+                          wr(`expenses/${id}`, { id, ts:Date.now(), desc:`${mName(t.from)} → ${mName(t.to)} ödeme`, amount:t.amt, currency:t.cur, paidBy:t.from, splitAmong:[t.to], category:"other", city:"global", isSettlement:true });
+                          toast(`${mName(t.from)} → ${mName(t.to)}: ${SYM[t.cur]||t.cur}${t.amt.toFixed(2)} ödeme kaydedildi ✅`, "💸");
+                        }}>Ödendi ✓</button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Temiz durum */}
+                {allClear && (
+                  <div style={{padding:"28px 18px",textAlign:"center"}}>
+                    <div style={{fontSize:40,marginBottom:8}}>🎉</div>
+                    <div style={{fontWeight:800,fontSize:15,color:"var(--green)"}}>Tüm hesaplar kapatıldı!</div>
+                    <div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>Herkes kendi payını ödedi.</div>
+                  </div>
+                )}
+                {!allClear && allTxs.length===0 && participants.length===0 && (
+                  <div style={{padding:"20px 18px",textAlign:"center",fontSize:13,color:"var(--muted)"}}>Henüz masraf eklenmemiş.</div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Geçmiş */}
           <div style={{marginTop:18}}>
@@ -2584,6 +2708,42 @@ function App() {
       )}
 
 
+      {showPackTemplates && (
+        <Modal onClose={() => setShowPackTemplates(false)}>
+          <ModalHead title="📦 Şablon Seç" onClose={() => setShowPackTemplates(false)}/>
+          <p style={{fontSize:13,color:"var(--muted)",marginBottom:16}}>Şablondaki maddeler mevcut listeye eklenir, olanların üzerine yazmaz.</p>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {PACK_TEMPLATES.map(tpl => {
+              const existing = new Set(packing.map(i => i.text?.toLowerCase().trim()));
+              const newCount = tpl.items.filter(it => !existing.has(it.toLowerCase().trim())).length;
+              return (
+                <div key={tpl.id} className="tap" onClick={() => {
+                  const existing = new Set(packing.map(i => i.text?.toLowerCase().trim()));
+                  const toAdd = tpl.items.filter(it => !existing.has(it.toLowerCase().trim()));
+                  if (toAdd.length === 0) { toast("Tüm maddeler zaten listede!", "✅"); setShowPackTemplates(false); return; }
+                  const updates = {};
+                  toAdd.forEach(text => { const id = newId(); updates[`packing/${id}`] = { id, text, by: myUid, done: false, ts: Date.now() }; });
+                  window._db.ref(`trips/${activeTrip}`).update(updates);
+                  toast(`${toAdd.length} madde eklendi!`, tpl.emoji);
+                  setShowPackTemplates(false);
+                }} style={{display:"flex",alignItems:"center",gap:14,background:"var(--surface-2)",borderRadius:14,padding:"14px 16px",border:"1.5px solid var(--border)"}}>
+                  <div style={{fontSize:32,flexShrink:0}}>{tpl.emoji}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:15}}>{tpl.name}</div>
+                    <div style={{fontSize:12,color:"var(--muted)",marginTop:2}}>
+                      {tpl.items.length} madde
+                      {newCount < tpl.items.length && newCount > 0 && <span style={{color:"var(--acc)",fontWeight:600}}> · {newCount} yeni eklenecek</span>}
+                      {newCount === 0 && <span style={{color:"var(--green)",fontWeight:600}}> · Hepsi zaten listede ✓</span>}
+                    </div>
+                  </div>
+                  <span style={{fontSize:20,color:"var(--muted)"}}>›</span>
+                </div>
+              );
+            })}
+          </div>
+        </Modal>
+      )}
+
       {showBudget && (
         <Modal onClose={() => setShowBudget(false)}>
           <ModalHead title="🎯 Gezi Bütçesi" onClose={() => setShowBudget(false)}/>
@@ -2677,49 +2837,14 @@ function App() {
             setCity(id);
             setShowAddCity(false);
             setNewCity({ name:"", emoji:"📍" });
-            // Google Places API (New) — tourist attractions by popularity
-            try {
-              const GPKEY = "AIzaSyA-IcAvybYBILp5Bs5ieMVhBQvlorpLe-c";
-              const resp = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Goog-Api-Key": GPKEY,
-                  "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.primaryTypeDisplayName"
-                },
-                body: JSON.stringify({
-                  includedTypes: ["tourist_attraction", "museum"],
-                  maxResultCount: 15,
-                  locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 6000 } },
-                  rankPreference: "POPULARITY"
-                })
-              });
-              const data = await resp.json();
-              if (data.error) throw new Error(data.error.message);
-              const spots = (data.places || []).map((p, i) => ({
-                id: "place_" + p.id,
-                name: p.displayName?.text || "?",
-                desc: p.primaryTypeDisplayName?.text || "",
-                lat: p.location?.latitude,
-                lon: p.location?.longitude,
-                rating: p.rating || null,
-                reviewCount: p.userRatingCount || null,
-                city: id,
-                sortOrder: i,
-                url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.displayName?.text || "")}&query_place_id=${p.id}`
-              })).filter(s => s.lat && s.lon);
-              if (spots.length > 0) {
-                setTouristSpots({ cityId: id, cityName, spots });
-                setTouristSel(new Set(spots.map(s => s.id)));
-              }
-            } catch(err) { console.error("Google Places error", err); toast("Mekan önerileri yüklenemedi: " + (err.message || err), "❌"); }
+            toast(`${cityName} eklendi! 🏛️ Turistik veya 🍽️ Yemek butonlarıyla mekan önerilerini yükle.`, "📍");
           }}>Ekle</button>
         </Modal>
       )}
 
       {touristSpots && (
         <Modal onClose={() => { setTouristSpots(null); setTouristSel(new Set()); }}>
-          <ModalHead title="🏛️ Turistik Noktalar" onClose={() => { setTouristSpots(null); setTouristSel(new Set()); }}/>
+          <ModalHead title={touristSpots.category === "food" ? "🍽️ Yemek & Café Önerileri" : "🏛️ Turistik Mekan Önerileri"} onClose={() => { setTouristSpots(null); setTouristSel(new Set()); }}/>
           <div style={{fontSize:13,color:"var(--muted)",marginBottom:10}}>
             <b>{touristSpots.cityName}</b> için {touristSpots.spots.length} yer bulundu.
             <span style={{marginLeft:6,color:"var(--pri)",fontWeight:700,cursor:"pointer"}}

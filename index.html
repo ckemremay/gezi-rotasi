@@ -2855,25 +2855,23 @@ function App() {
             setShowAddCity(false);
             setNewCity({ name:"", emoji:"📍" });
             // Şehrin ikonik Wikipedia görselini çek → gezi kapak fotoğrafı olarak kaydet
-            (async () => {
-              try {
-                // Önce geo-search: şehir koordinatlarına en yakın popüler Wikipedia makalesi
-                const geoUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=10000&ggslimit=5&prop=pageimages|info&inprop=url&format=json&pithumbsize=1200&pilimit=5&origin=*`;
-                const geoData = await fetch(geoUrl).then(r => r.json());
-                const geoPages = Object.values(geoData.query?.pages || {});
-                // Thumbnail'i olan ilk sayfayı bul
-                const geoHit = geoPages.find(p => p.thumbnail?.source);
-                if (geoHit) {
-                  wr(`trips/${activeTrip}/meta/coverImg`, geoHit.thumbnail.source);
-                  return;
-                }
-                // Geo-search sonuç vermezse şehir adıyla doğrudan ara
-                const searchData = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(cityName)}&prop=pageimages&format=json&pithumbsize=1200&origin=*`).then(r => r.json());
-                const searchPages = Object.values(searchData.query?.pages || {});
-                const thumb = searchPages.find(p => p.thumbnail?.source)?.thumbnail?.source;
-                if (thumb) wr(`trips/${activeTrip}/meta/coverImg`, thumb);
-              } catch {}
-            })();
+            // _wikiEnqueue kuyruğuna öncelikli olarak ekle (PlaceImage ile çakışmasın)
+            _wikiEnqueue(async () => {
+              // Geo-search: şehir koordinatlarına en yakın popüler Wikipedia makalesi
+              const geoUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=10000&ggslimit=5&prop=pageimages&format=json&pithumbsize=1200&pilimit=5&origin=*`;
+              const geoData = await fetch(geoUrl).then(r => r.json());
+              const geoPages = Object.values(geoData.query?.pages || {});
+              const geoHit = geoPages.find(p => p.thumbnail?.source);
+              if (geoHit) {
+                wr(`trips/${activeTrip}/meta/coverImg`, geoHit.thumbnail.source);
+                return;
+              }
+              // Fallback: şehir adıyla doğrudan Wikipedia makalesi
+              const searchData = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(cityName)}&prop=pageimages&format=json&pithumbsize=1200&origin=*`).then(r => r.json());
+              const searchPages = Object.values(searchData.query?.pages || {});
+              const thumb = searchPages.find(p => p.thumbnail?.source)?.thumbnail?.source;
+              if (thumb) wr(`trips/${activeTrip}/meta/coverImg`, thumb);
+            }).catch(() => {});
             // Her iki kategoriyi paralel çek
             const GPKEY = "AIzaSyA-IcAvybYBILp5Bs5ieMVhBQvlorpLe-c";
             const fetchCat = async (types, maxResults, catType) => {

@@ -1364,6 +1364,14 @@ function App() {
     const inEUR = amt / (rates[convBase] || 1);
     return Object.entries(rates).map(([cur, r]) => ({ cur, val: (inEUR * r).toFixed(2) }));
   }, [convAmt, convBase, rates]);
+  // Plan sekmesi — tüm şehirlerdeki mekanlar (erken return'lerden önce olması gerekiyor)
+  const allPlacesWithCity = useMemo(
+    () => Object.values(TD.customPlaces || {}).flatMap(p => {
+      const c = Object.values(TD.cities || {}).find(c => c.id === p.city);
+      return c ? [{ ...p, cityName: c.name, cityEmoji: c.emoji }] : [];
+    }),
+    [TD.customPlaces, TD.cities]
+  );
 
   // ── Giriş ekranı: üstte kart animasyonu, altta giriş paneli
   if (user === null) return (
@@ -1615,32 +1623,20 @@ function App() {
   const placeComments = TD.placeComments || {};
   const allCities = allCitiesNow;
   const customCities = TD.cities || {};
-  // Plan sekmesi — tüm şehirlerdeki mekanlar (güne atama için)
-  const allPlacesWithCity = useMemo(
-    () => allCities.flatMap(c =>
-      Object.values(TD.customPlaces || {}).filter(p => p.city === c.id)
-        .map(p => ({ ...p, cityName: c.name, cityEmoji: c.emoji }))),
-    [allCities, TD.customPlaces]
-  );
   const activeCityObj = allCities.find(c => c.id === city) || allCities[0];
   const customCityPl = customPlacesForCity.slice().sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const cityPlaces = [...(STATIC_PLACES[city] || []), ...customCityPl];
   const cityVisCount = cityPlaces.filter(p => visited[p.id]).length;
-  // Hesaplaşma — expenses değişince yeniden hesapla
-  const { participants, eurRes, tryRes, usdRes } = useMemo(() => {
-    const partSet = new Set(memberList.map(m => String(m.uid)));
-    expenses.forEach(e => {
-      if (e.paidBy !== undefined && e.paidBy !== null) partSet.add(String(e.paidBy));
-      (e.splitAmong || []).forEach(s => partSet.add(String(s)));
-    });
-    const participants = [...partSet];
-    return {
-      participants,
-      eurRes: settle(expenses, participants, "EUR"),
-      tryRes: settle(expenses, participants, "TRY"),
-      usdRes: settle(expenses, participants, "USD"),
-    };
-  }, [expenses, memberList]);
+  // Hesaplaşma katılımcıları
+  const partSet = new Set(memberList.map(m => String(m.uid)));
+  expenses.forEach(e => {
+    if (e.paidBy !== undefined && e.paidBy !== null) partSet.add(String(e.paidBy));
+    (e.splitAmong || []).forEach(s => partSet.add(String(s)));
+  });
+  const participants = [...partSet];
+  const eurRes = settle(expenses, participants, "EUR");
+  const tryRes = settle(expenses, participants, "TRY");
+  const usdRes = settle(expenses, participants, "USD");
   const toggleRoute = id => setRouteIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
   const pDay = p => placeDays[p.id] || 0;
   // Bütçe durumu

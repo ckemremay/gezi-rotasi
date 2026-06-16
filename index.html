@@ -1001,11 +1001,9 @@ function App() {
     const meta = { id, name, emoji: emoji || "✈️", ownerUid: myUid, createdAt: Date.now(), ...(startDate && { startDate }), ...(endDate && { endDate }) };
     const memberEntry = { uid: myUid, name: userProfile?.name || "?", email: user?.email || "", role: "owner", joinedAt: Date.now() };
     const userTripEntry = { ...meta, role: "owner" };
-    const updates = {};
-    updates[`trips/${id}/meta`] = meta;
-    updates[`trips/${id}/members/${myUid}`] = memberEntry;
-    updates[`users/${myUid}/trips/${id}`] = userTripEntry;
-    window._db.ref().update(updates);
+    window._db.ref(`trips/${id}/meta`).set(meta);
+    window._db.ref(`trips/${id}/members/${myUid}`).set(memberEntry);
+    window._db.ref(`users/${myUid}/trips/${id}`).set(userTripEntry);
     switchTrip(id);
     toast("Gezi oluşturuldu! 🎉", "✈️");
   };
@@ -1017,10 +1015,8 @@ function App() {
       if (!meta) { toast("Geçersiz davet linki.", "❌"); return; }
       const memberEntry = { uid: myUid, name: userProfile?.name || "?", email: user?.email || "", role: "editor", joinedAt: Date.now() };
       const userTripEntry = { ...meta, role: "editor" };
-      const updates = {};
-      updates[`trips/${tripId}/members/${myUid}`] = memberEntry;
-      updates[`users/${myUid}/trips/${tripId}`] = userTripEntry;
-      await window._db.ref().update(updates);
+      await window._db.ref(`trips/${tripId}/members/${myUid}`).set(memberEntry);
+      await window._db.ref(`users/${myUid}/trips/${tripId}`).set(userTripEntry);
       // URL ve sessionStorage'dan join parametresini temizle
       sessionStorage.removeItem('gezi_pending_join');
       try { const u = new URL(location.href); u.searchParams.delete("join"); history.replaceState({}, "", u.toString()); } catch {}
@@ -1029,10 +1025,8 @@ function App() {
     } catch(e) { console.error("joinTrip error:", e); toast("Geziye katılırken hata: " + (e.message || e), "❌"); }
   };
   const leaveTrip = async (tripId) => {
-    const updates = {};
-    updates[`trips/${tripId}/members/${myUid}`] = null;
-    updates[`users/${myUid}/trips/${tripId}`] = null;
-    await window._db.ref().update(updates);
+    await window._db.ref(`trips/${tripId}/members/${myUid}`).remove();
+    await window._db.ref(`users/${myUid}/trips/${tripId}`).remove();
     if (activeTrip === tripId) { setActiveTrip(null); localStorage.removeItem("gezi_trip"); }
     toast("Geziden ayrıldın.", "👋");
   };
@@ -1042,10 +1036,8 @@ function App() {
       // - trips/${tripId}: owner can delete the whole trip
       // - users/${myUid}/trips/${tripId}: own index entry
       // Other members' index entries are orphaned but cleaned up on their next access
-      const updates = {};
-      updates[`trips/${tripId}`] = null;
-      updates[`users/${myUid}/trips/${tripId}`] = null;
-      await window._db.ref().update(updates);
+      await window._db.ref(`trips/${tripId}`).remove();
+      await window._db.ref(`users/${myUid}/trips/${tripId}`).remove();
       if (activeTrip === tripId) { setActiveTrip(null); localStorage.removeItem("gezi_trip"); }
       toast("Gezi silindi.", "🗑️");
     } catch(e) { toast("Gezi silinemedi: " + e.message, "❌"); }
@@ -1072,10 +1064,8 @@ function App() {
         const snap = await window._db.ref(`trips/${tripId}/meta`).once("value");
         const meta = snap.val();
         if (!meta) { toast("Geçersiz davet linki.", "❌"); return; }
-        const updates = {};
-        updates[`trips/${tripId}/members/${uid}`] = { uid, name: uName, email: uEmail, role: "editor", joinedAt: Date.now() };
-        updates[`users/${uid}/trips/${tripId}`] = { ...meta, role: "editor" };
-        await window._db.ref().update(updates);
+        await window._db.ref(`trips/${tripId}/members/${uid}`).set({ uid, name: uName, email: uEmail, role: "editor", joinedAt: Date.now() });
+        await window._db.ref(`users/${uid}/trips/${tripId}`).set({ ...meta, role: "editor" });
         try { const u = new URL(location.href); u.searchParams.delete("join"); history.replaceState({}, "", u.toString()); } catch {}
         localStorage.setItem("gezi_trip", tripId);
         setActiveTrip(tripId);

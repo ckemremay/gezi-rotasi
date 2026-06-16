@@ -945,9 +945,12 @@ function App() {
         const prevStr = prev ? JSON.stringify({ ...prev, visited: 0 }) : null;
         const nextStr = JSON.stringify({ ...next, visited: 0 });
         const onlyVisited = prevStr === nextStr;
+        const nextVisited = next.visited || {};
+        const nextVisitedStr = JSON.stringify(nextVisited);
         startTransition(() => {
-          setVisitedData(next.visited || {});
-          setLocalVisited({});
+          // Use prev reference if content unchanged → React bails out, zero re-render
+          setVisitedData(prev => JSON.stringify(prev) === nextVisitedStr ? prev : nextVisited);
+          setLocalVisited(prev => Object.keys(prev).length === 0 ? prev : {});
           if (!onlyVisited) {
             setFData(next);
             setCity(c => c || Object.keys(next?.cities || {})[0] || null);

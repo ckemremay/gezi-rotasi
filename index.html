@@ -367,50 +367,7 @@ window._loadChart = (() => {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ── STATİK VERİ ───────────────────────────────────────────────────────────────
-const DEFAULT_CITIES = [];   // Tüm şehirler kullanıcı tarafından eklenir
 const STATIC_PLACES = {};    // Önceden tanımlı mekan yok
-const _OLD_STATIC_PLACES = {
-  bremen: [
-    { id:"b1", name:"🎡 Mühle am Wall", desc:"Bremen'in en ikonik yel değirmeni.", lat:53.0805, lon:8.8048, isStatic:true, url:"https://maps.app.goo.gl/wESmemF8PgUnNgJ18" },
-    { id:"b2", name:"🏛️ Bremen Marktplatz", desc:"UNESCO Dünya Mirası, şehrin kalbi.", lat:53.0758, lon:8.8073, isStatic:true, url:"https://maps.app.goo.gl/afdHmMozHGTKSZ3p7" },
-    { id:"b3", name:"🛡️ Bremen Roland", desc:"1404'ten kalma özgürlük heykeli.", lat:53.0759, lon:8.8074, isStatic:true, url:"https://maps.app.goo.gl/vncH3ewTgAFv9Wiw6" },
-    { id:"b4", name:"⛪ St. Petri Dom", desc:"1000 yıllık gotik katedral.", lat:53.0757, lon:8.8088, isStatic:true, url:"https://maps.app.goo.gl/FW5niLuGXo347FLH7" },
-    { id:"b5", name:"🧱 Böttcherstraße", desc:"Ekspresyonist mimarinin dar sokağı.", lat:53.0751, lon:8.8058, isStatic:true, url:"https://maps.app.goo.gl/wvmcAMfasukr9hvf7" },
-    { id:"b6", name:"🛍️ Manufactum", desc:"Alman kalitesini temsil eden mağaza.", lat:53.0753, lon:8.8062, isStatic:true, url:"https://maps.app.goo.gl/NC44j2ZhqxRppLCo9" },
-    { id:"b7", name:"🏘️ Schnoor", desc:"Bremen'in en eski masalsı mahallesi.", lat:53.0728, lon:8.8093, isStatic:true, url:"https://maps.app.goo.gl/ADuPhL4iX3RsD61x8" },
-    { id:"b8", name:"☕ Harbour Coffee", desc:"En iyi specialty kahve noktası.", lat:53.0768, lon:8.8016, isStatic:true, url:"https://maps.app.goo.gl/ZtLJxEPcDA7PLBMR7" },
-    { id:"b9", name:"🎨 Ostertorviertel", desc:"Alternatif, canlı genç mahalle.", lat:53.0735, lon:8.8208, isStatic:true, url:"https://maps.app.goo.gl/UcSBWifh2fzKssqv7" },
-    { id:"b10", name:"🌅 Schlachte", desc:"Weser kıyısı, gün batımı noktası.", lat:53.0772, lon:8.8016, isStatic:true, url:"https://maps.app.goo.gl/NFW9gPZjSJe41QuUA" },
-    { id:"b11", name:"🍰 Café Knigge", desc:"Klasik Alman pastanesi.", lat:53.0784, lon:8.8097, isStatic:true, url:"https://maps.app.goo.gl/m719AKhXDrEQPV3C7" }
-  ],
-  hamburg: [
-    { id:"h1", name:"🚂 Hamburg Hbf", desc:"Ana tren istasyonu, başlangıç noktası.", lat:53.5528, lon:10.0064, isStatic:true, url:"https://maps.app.goo.gl/nK1QzUFg8GUMA41MA" },
-    { id:"h2", name:"🚶 Mönckebergstraße", desc:"Ana alışveriş caddesi.", lat:53.5512, lon:9.9984, isStatic:true, url:"https://maps.google.com/?q=Mönckebergstraße+Hamburg" },
-    { id:"h3", name:"⛪ St. Peter's Church", desc:"12. yüzyıldan kalma en eski kilise.", lat:53.5505, lon:9.9961, isStatic:true, url:"https://maps.google.com/?q=St.+Peter%27s+Church+Hamburg" },
-    { id:"h4", name:"☕ Elbgold Coffee", desc:"Hamburg'un ünlü kahve kavurma yeri.", lat:53.5447, lon:9.9863, isStatic:true, url:"https://maps.app.goo.gl/DFiB8T4FSHYDbTNH7" },
-    { id:"h5", name:"⛲ Rathausmarkt", desc:"Belediye meydanı.", lat:53.5508, lon:9.9930, isStatic:true, url:"https://maps.google.com/?q=Rathausmarkt+Hamburg" },
-    { id:"h6", name:"🏛️ Hamburg Rathaus", desc:"647 odalı belediye binası.", lat:53.5505, lon:9.9922, isStatic:true, url:"https://maps.google.com/?q=Hamburg+Rathaus" },
-    { id:"h7", name:"🌊 Binnenalster", desc:"Şehir merkezindeki yapay göl.", lat:53.5534, lon:9.9931, isStatic:true, url:"https://maps.google.com/?q=Binnenalster" },
-    { id:"h8", name:"🌉 Lombardsbrücke", desc:"Alster manzaralı tarihi köprü.", lat:53.5562, lon:9.9942, isStatic:true, url:"https://maps.google.com/?q=Lombardsbrücke" },
-    { id:"h9", name:"🍵 Das Teekontor", desc:"Tarihi çay dükkanı.", lat:53.5485, lon:9.9948, isStatic:true, url:"https://maps.google.com/?q=Das+Teekontor+Hamburg" },
-    { id:"h10", name:"🚢 Chilehaus", desc:"Gemi formlu ekspresyonist bina.", lat:53.5484, lon:10.0016, isStatic:true, url:"https://maps.google.com/?q=Chilehaus" },
-    { id:"h11", name:"🏘️ Deichstraße", desc:"Yangından kurtulan tarihi sokak.", lat:53.5453, lon:9.9877, isStatic:true, url:"https://maps.google.com/?q=Deichstraße+Hamburg" },
-    { id:"h12", name:"☕ Nord Coast Coffee", desc:"Kanal manzaralı modern kafe.", lat:53.5458, lon:9.9885, isStatic:true, url:"https://maps.app.goo.gl/KmieACguqRgiPpXq7" },
-    { id:"h13", name:"🧱 Speicherstadt", desc:"UNESCO mirası tarihi depo kompleksi.", lat:53.5444, lon:9.9918, isStatic:true, url:"https://maps.google.com/?q=Speicherstadt" },
-    { id:"h14", name:"📸 Poggenmühlen Bridge", desc:"En ikonik fotoğraf noktası.", lat:53.5458, lon:9.9989, isStatic:true, url:"https://maps.google.com/?q=Poggenmühlen+Bridge" },
-    { id:"h15", name:"⛪ St. Michaelis", desc:"Hamburg'un barok simgesi.", lat:53.5484, lon:9.9789, isStatic:true, url:"https://maps.google.com/?q=St.+Michaelis+Church+Hamburg" },
-    { id:"h16", name:"⚓ Landungsbrücken", desc:"Elbe kıyısı yüzer iskeleler.", lat:53.5458, lon:9.9696, isStatic:true, url:"https://maps.google.com/?q=Landungsbrücken" },
-    { id:"h17", name:"🎨 Karolinenviertel", desc:"Alternatif butik mahalle.", lat:53.5593, lon:9.9744, isStatic:true, url:"https://maps.google.com/?q=Karolinenviertel+Hamburg" },
-    { id:"h18", name:"☕ Public Coffee Roasters", desc:"Liman bölgesi modern kafe.", lat:53.5515, lon:9.9575, isStatic:true, url:"https://maps.google.com/?q=Public+Coffee+Roasters+Hamburg" }
-  ],
-  odense: [
-    { id:"o1", name:"🏠 H.C. Andersen House", desc:"Andersen'in doğduğu ev ve müze.", lat:55.3995, lon:10.3922, isStatic:true, url:"https://maps.google.com/?q=HC+Andersen+Museum+Odense" },
-    { id:"o2", name:"⛪ Odense Cathedral", desc:"Danimarka'nın en güzel gotiği.", lat:55.3956, lon:10.3888, isStatic:true, url:"https://maps.google.com/?q=Odense+Cathedral" },
-    { id:"o3", name:"🏘️ The Funen Village", desc:"Açık hava köy müzesi.", lat:55.3678, lon:10.3855, isStatic:true, url:"https://maps.google.com/?q=Den+Fynske+Landsby" },
-    { id:"o4", name:"🚲 Brandts Klædefabrik", desc:"Eski fabrikadan sanat merkezi.", lat:55.3958, lon:10.3811, isStatic:true, url:"https://maps.google.com/?q=Brandts+Odense" },
-    { id:"o5", name:"🌳 Munke Mose Park", desc:"Şehrin en sevilen parkı.", lat:55.3922, lon:10.3855, isStatic:true, url:"https://maps.google.com/?q=Munke+Mose+Odense" }
-  ]
-};
 const EXP_CATS = [
   { id:"food", name:"Yemek", emoji:"🍽️", color:"#FF6B6B" },
   { id:"transport", name:"Ulaşım", emoji:"🚗", color:"#4ECDC4" },
@@ -515,8 +472,9 @@ function Modal({ onClose, children }) {
   );
 }
 
-// Wikipedia resim isteği kuyruğu — eş zamanlı istek sayısını sınırlar
+// Wikipedia resim isteği kuyruğu — eş zamanlı istek sayısını sınırlar + önbellek
 const _wikiQueue = { tasks: [], running: 0, MAX: 3 };
+const _wikiCache = new Map(); // name → Promise<string|null>
 function _wikiEnqueue(fn) {
   return new Promise((resolve, reject) => {
     _wikiQueue.tasks.push({ fn, resolve, reject });
@@ -529,10 +487,25 @@ function _wikiDrain() {
     _wikiQueue.running++;
     fn().then(resolve, reject).finally(() => {
       _wikiQueue.running--;
-      // Kısa gecikme ile sonraki isteği başlat (rate limit önlemi)
       setTimeout(_wikiDrain, 200);
     });
   }
+}
+function _fetchWikiImg(name) {
+  if (_wikiCache.has(name)) return _wikiCache.get(name);
+  const p = _wikiEnqueue(async () => {
+    const r1 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name)}&srlimit=3&format=json&origin=*`);
+    const d1 = await r1.json();
+    const results = d1.query?.search || [];
+    if (!results.length) return null;
+    const title = results[0].title;
+    const r2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
+    const d2 = await r2.json();
+    const pages = Object.values(d2.query?.pages || {});
+    return pages[0]?.thumbnail?.source || null;
+  }).catch(() => null);
+  _wikiCache.set(name, p);
+  return p;
 }
 
 function PlaceImage({ name }) {
@@ -540,21 +513,7 @@ function PlaceImage({ name }) {
   React.useEffect(() => {
     if (!name) return;
     let cancelled = false;
-    _wikiEnqueue(async () => {
-      if (cancelled) return;
-      const r1 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name)}&srlimit=3&format=json&origin=*`);
-      const d1 = await r1.json();
-      if (cancelled) return;
-      const results = d1.query?.search || [];
-      if (!results.length) return;
-      const title = results[0].title;
-      const r2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
-      const d2 = await r2.json();
-      if (cancelled) return;
-      const pages = Object.values(d2.query?.pages || {});
-      const thumb = pages[0]?.thumbnail?.source;
-      if (thumb) setSrc(thumb);
-    }).catch(() => {});
+    _fetchWikiImg(name).then(url => { if (!cancelled && url) setSrc(url); });
     return () => { cancelled = true; };
   }, [name]);
   if (!src) return null;
@@ -830,7 +789,6 @@ function App() {
   const [showDelExp, setShowDelExp] = useState(null);
   const [showPollCreate, setShowPollCreate] = useState(false);
   const [viewPhoto, setViewPhoto] = useState(null);
-  const [showConv, setShowConv] = useState(false);
   const [showBudget, setShowBudget] = useState(false);
   const [showAddTrip, setShowAddTrip] = useState(false);
   // Formlar
@@ -1152,19 +1110,25 @@ function App() {
   }, [fData, activeTrip]);
 
   // ── Hava + kur
-  const allCitiesNow = fData ? [...DEFAULT_CITIES, ...Object.values(TD.cities || {})] : DEFAULT_CITIES;
+  const allCitiesNow = fData ? Object.values(TD.cities || {}) : [];
   const _activeCityForWx = allCitiesNow.find(x => x.id === city);
   const _wxKey = _activeCityForWx ? `${_activeCityForWx.lat},${_activeCityForWx.lon}` : null;
+  // Hava durumu: şehir değişince yenile
   useEffect(() => {
     if (!_wxKey) return;
     const [lat, lon] = _wxKey.split(",");
     setWxData(null);
+    let cancelled = false;
     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`)
-      .then(r => r.json()).then(d => setWxData(d)).catch(() => {});
+      .then(r => r.json()).then(d => { if (!cancelled) setWxData(d); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [_wxKey]);
+  // Döviz kuru: uygulama açılışında bir kez çek
+  useEffect(() => {
     fetch("https://open.er-api.com/v6/latest/EUR").then(r => r.json()).then(d => {
       if (d.rates) setRates({ EUR:1, TRY:d.rates.TRY || 38.5, USD:d.rates.USD || 1.08, DKK:d.rates.DKK || 7.46 });
     }).catch(() => {});
-  }, [_wxKey, activeTrip]);
+  }, []);
 
   // ── Harita
   useEffect(() => {
@@ -1295,41 +1259,6 @@ function App() {
     }, () => toast("Konum izni reddedildi.", "❌"));
   };
 
-  // ── Mekan önerileri (turistik / yemek)
-  const fetchPlaceSuggestions = async (catType) => {
-    const activeCity = allCitiesNow.find(c => c.id === city);
-    if (!activeCity?.lat) { toast("Önce bir şehir seçin.", "⚠️"); return; }
-    const { lat, lon, id: cid, name: cName } = activeCity;
-    const isFood = catType === "food";
-    const GPKEY = "AIzaSyA-IcAvybYBILp5Bs5ieMVhBQvlorpLe-c";
-    try {
-      const resp = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
-        method: "POST",
-        headers: { "Content-Type":"application/json", "X-Goog-Api-Key":GPKEY,
-          "X-Goog-FieldMask":"places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.primaryTypeDisplayName" },
-        body: JSON.stringify({
-          includedTypes: isFood ? ["restaurant","cafe","bakery"] : ["tourist_attraction","museum"],
-          maxResultCount: isFood ? 10 : 15,
-          locationRestriction: { circle: { center:{ latitude:lat, longitude:lon }, radius:6000 } },
-          rankPreference: "POPULARITY"
-        })
-      });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message);
-      const spots = (data.places||[]).map((p,i) => ({
-        id:"place_"+p.id, name:p.displayName?.text||"?",
-        desc:p.primaryTypeDisplayName?.text||"",
-        lat:p.location?.latitude, lon:p.location?.longitude,
-        rating:p.rating||null, reviewCount:p.userRatingCount||null,
-        category: catType, city: cid, sortOrder:i,
-        url:`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.displayName?.text||"")}&query_place_id=${p.id}`
-      })).filter(s => s.lat && s.lon);
-      if (spots.length > 0) {
-        setTouristSpots({ cityId:cid, cityName:cName, spots, category:catType });
-        setTouristSel(new Set(spots.map(s => s.id)));
-      } else toast("Öneri bulunamadı.", "❌");
-    } catch(err) { console.error("Places error:", err); toast("Öneriler yüklenemedi: "+(err.message||err), "❌"); }
-  };
 
   // ── Bildirim izni
   const askNotif = async () => {
@@ -1352,10 +1281,12 @@ function App() {
   // ── Gezi karşılaştırma verisi
   useEffect(() => {
     if (!compareTrip || compareTrip === activeTrip) { setCompareTripData(null); return; }
+    let cancelled = false;
     window._db.ref(`trips/${compareTrip}`).once("value")
-      .then(s => setCompareTripData(s.val()))
-      .catch(() => setCompareTripData(null));
-  }, [compareTrip]);
+      .then(s => { if (!cancelled) setCompareTripData(s.val()); })
+      .catch(() => { if (!cancelled) setCompareTripData(null); });
+    return () => { cancelled = true; };
+  }, [compareTrip, activeTrip]);
 
   // ── Touch sürükleme (mobil gün planı)
   const startTouchDrag = (e, placeId, placeName) => {
@@ -1403,23 +1334,31 @@ function App() {
   };
 
   // ── useMemo'lar (koşullu return'lerden önce)
+  // customPlaces'i stabil ref ile al — fData'nın tamamına bağlanmaktan kaçın
+  const customPlacesForCity = useMemo(
+    () => Object.values(TD.customPlaces || {}).filter(p => p.city === city),
+    [TD.customPlaces, city]
+  );
+  const allCustomPlaces = useMemo(
+    () => Object.values(TD.customPlaces || {}),
+    [TD.customPlaces]
+  );
   const nearbyPlaces = useMemo(() => {
     if (!fData || !userLoc || !nearbyMode) return null;
-    const cp = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
-    return cp.map(p => ({ ...p, dist: haversine(userLoc.lat, userLoc.lon, p.lat || 0, p.lon || 0) }))
+    return customPlacesForCity
+      .map(p => ({ ...p, dist: haversine(userLoc.lat, userLoc.lon, p.lat || 0, p.lon || 0) }))
       .filter(p => p.dist < 2000).sort((a, b) => a.dist - b.dist);
-  }, [userLoc, nearbyMode, city, fData, activeTrip]);
+  }, [userLoc, nearbyMode, customPlacesForCity, fData]);
   const routeStats = useMemo(() => {
     if (!fData || routeIds.length < 2) return null;
-    const allP = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
-    const ordered = routeIds.map(id => allP.find(p => p.id === id)).filter(Boolean);
+    const ordered = routeIds.map(id => customPlacesForCity.find(p => p.id === id)).filter(Boolean);
     let total = 0;
     for (let i = 0; i < ordered.length - 1; i++) {
       const a = ordered[i], b = ordered[i+1];
       if (a.lat && b.lat) total += haversine(a.lat, a.lon, b.lat, b.lon);
     }
     return { dist: total, min: walkMin(total), stops: routeIds.length, places: ordered };
-  }, [routeIds, city, fData, activeTrip]);
+  }, [routeIds, customPlacesForCity, fData]);
   const convResult = useMemo(() => {
     const amt = parseFloat(convAmt) || 0;
     const inEUR = amt / (rates[convBase] || 1);
@@ -1676,20 +1615,32 @@ function App() {
   const placeComments = TD.placeComments || {};
   const allCities = allCitiesNow;
   const customCities = TD.cities || {};
+  // Plan sekmesi — tüm şehirlerdeki mekanlar (güne atama için)
+  const allPlacesWithCity = useMemo(
+    () => allCities.flatMap(c =>
+      Object.values(TD.customPlaces || {}).filter(p => p.city === c.id)
+        .map(p => ({ ...p, cityName: c.name, cityEmoji: c.emoji }))),
+    [allCities, TD.customPlaces]
+  );
   const activeCityObj = allCities.find(c => c.id === city) || allCities[0];
-  const customCityPl = Object.values(TD.customPlaces || {}).filter(p => p.city === city).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const customCityPl = customPlacesForCity.slice().sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const cityPlaces = [...(STATIC_PLACES[city] || []), ...customCityPl];
   const cityVisCount = cityPlaces.filter(p => visited[p.id]).length;
-  // Hesaplaşma katılımcıları: üyeler + masraflarda geçen eski kimlikler
-  const partSet = new Set(memberList.map(m => String(m.uid)));
-  expenses.forEach(e => {
-    if (e.paidBy !== undefined && e.paidBy !== null) partSet.add(String(e.paidBy));
-    (e.splitAmong || []).forEach(s => partSet.add(String(s)));
-  });
-  const participants = [...partSet];
-  const eurRes = settle(expenses, participants, "EUR");
-  const tryRes = settle(expenses, participants, "TRY");
-  const usdRes = settle(expenses, participants, "USD");
+  // Hesaplaşma — expenses değişince yeniden hesapla
+  const { participants, eurRes, tryRes, usdRes } = useMemo(() => {
+    const partSet = new Set(memberList.map(m => String(m.uid)));
+    expenses.forEach(e => {
+      if (e.paidBy !== undefined && e.paidBy !== null) partSet.add(String(e.paidBy));
+      (e.splitAmong || []).forEach(s => partSet.add(String(s)));
+    });
+    const participants = [...partSet];
+    return {
+      participants,
+      eurRes: settle(expenses, participants, "EUR"),
+      tryRes: settle(expenses, participants, "TRY"),
+      usdRes: settle(expenses, participants, "USD"),
+    };
+  }, [expenses, memberList]);
   const toggleRoute = id => setRouteIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
   const pDay = p => placeDays[p.id] || 0;
   // Bütçe durumu
@@ -1716,10 +1667,7 @@ function App() {
       <Toast toasts={toasts}/>
 
       {/* ── HERO HEADER ── */}
-      <div className="header" style={activeTripMeta.coverImg ? {
-        backgroundImage:`linear-gradient(160deg,rgba(15,35,20,.72) 0%,rgba(15,35,20,.45) 60%,rgba(15,35,20,.72) 100%),url(${activeTripMeta.coverImg})`,
-        backgroundSize:"cover", backgroundPosition:"center"
-      } : {}}>
+      <div className="header">
         <div className="hero-top">
           <div>
             <div className="eyebrow">{activeTripMeta.emoji || "🧭"} {activeTripName} Gezisi</div>
@@ -2025,14 +1973,11 @@ function App() {
             <div className="tabs" style={{position:"static",padding:"0 0 10px",background:"transparent"}}>
               <div className={`tap ctab${dayFilter === 0 ? " on" : ""}`} onClick={() => setDayFilter(0)}>Tümü</div>
               {Array.from({length:MAX_DAYS}, (_, i) => i+1)
-                .filter(d => allCities.some(c => [...(STATIC_PLACES[c.id] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === c.id)].some(p => pDay(p) === d)))
+                .filter(d => allPlacesWithCity.some(p => pDay(p) === d))
                 .map(d => <div key={d} className={`tap ctab${dayFilter === d ? " on" : ""}`} onClick={() => setDayFilter(d)}>{d}. gün</div>)}
             </div>
             {(() => {
-              const allP = allCities.flatMap(c =>
-                [...(STATIC_PLACES[c.id] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === c.id)]
-                  .map(p => ({ ...p, cityName: c.name, cityEmoji: c.emoji })));
-              const assigned = allP.filter(p => pDay(p) > 0 && (dayFilter === 0 || pDay(p) === dayFilter));
+              const assigned = allPlacesWithCity.filter(p => pDay(p) > 0 && (dayFilter === 0 || pDay(p) === dayFilter));
               if (!assigned.length) return (
                 <div className="empty"><div className="big">📅</div>
                   Henüz güne atanmış mekan yok.<br/>Rota sekmesindeki mekan kartlarından "Gün ata…" ile planla.</div>
@@ -2099,9 +2044,11 @@ function App() {
               <div className="card" style={{padding:"14px 18px"}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:12,fontWeight:700}}>
                   <span>Hazırlık</span>
-                  <span style={{color:"var(--muted)"}}>{packing.filter(i => i.done).length}/{packing.length}</span>
+                  <span style={{color:"var(--muted)"}}>{packing.filter(i=>i.done).length}/{packing.length}</span>
                 </div>
-                <div className="prog"><div style={{width:`${packing.length ? packing.filter(i => i.done).length / packing.length * 100 : 0}%`,background:"var(--green)"}}/></div>
+                {(() => { const done = packing.filter(i=>i.done).length; return (
+                <div className="prog"><div style={{width:`${packing.length ? done/packing.length*100 : 0}%`,background:"var(--green)"}}/></div>
+                ); })()}
               </div>
             )}
             <button className="btn-out tap" style={{width:"100%",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
@@ -2854,24 +2801,6 @@ function App() {
             setCity(id);
             setShowAddCity(false);
             setNewCity({ name:"", emoji:"📍" });
-            // Şehrin ikonik Wikipedia görselini çek → gezi kapak fotoğrafı olarak kaydet
-            // _wikiEnqueue kuyruğuna öncelikli olarak ekle (PlaceImage ile çakışmasın)
-            _wikiEnqueue(async () => {
-              // Geo-search: şehir koordinatlarına en yakın popüler Wikipedia makalesi
-              const geoUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=10000&ggslimit=5&prop=pageimages&format=json&pithumbsize=1200&pilimit=5&origin=*`;
-              const geoData = await fetch(geoUrl).then(r => r.json());
-              const geoPages = Object.values(geoData.query?.pages || {});
-              const geoHit = geoPages.find(p => p.thumbnail?.source);
-              if (geoHit) {
-                wr(`trips/${activeTrip}/meta/coverImg`, geoHit.thumbnail.source);
-                return;
-              }
-              // Fallback: şehir adıyla doğrudan Wikipedia makalesi
-              const searchData = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(cityName)}&prop=pageimages&format=json&pithumbsize=1200&origin=*`).then(r => r.json());
-              const searchPages = Object.values(searchData.query?.pages || {});
-              const thumb = searchPages.find(p => p.thumbnail?.source)?.thumbnail?.source;
-              if (thumb) wr(`trips/${activeTrip}/meta/coverImg`, thumb);
-            }).catch(() => {});
             // Her iki kategoriyi paralel çek
             const GPKEY = "AIzaSyA-IcAvybYBILp5Bs5ieMVhBQvlorpLe-c";
             const fetchCat = async (types, maxResults, catType) => {

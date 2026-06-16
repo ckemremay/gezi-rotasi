@@ -364,7 +364,7 @@ window._loadChart = (() => {
   </div>
 </div>
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useRef, useMemo } = React;
+const { useState, useEffect, useRef, useMemo, startTransition } = React;
 
 // ── STATİK VERİ ───────────────────────────────────────────────────────────────
 const STATIC_PLACES = {};    // Önceden tanımlı mekan yok
@@ -806,6 +806,7 @@ function App() {
   // Rota / konum
   const [routeMode, setRouteMode] = useState(false);
   const [routeIds, setRouteIds] = useState([]);
+  const [localVisited, setLocalVisited] = useState({}); // optimistic visited — Firebase'den önce anında güncellenir
   const [userLoc, setUserLoc] = useState(null);
   const [nearbyMode, setNearbyMode] = useState(false);
   const [nearbyResults, setNearbyResults] = useState(null);
@@ -823,6 +824,7 @@ function App() {
   const [compareTripData, setCompareTripData] = useState(null);
   // Ref'ler
   const mapRef = useRef(null), polyRef = useRef(null), userMarkerRef = useRef(null);
+  const fDataRef = useRef(null);
   const memberMarkersRef = useRef([]);
   const routeMarkersRef = useRef([]);
   const mapCityRef = useRef(null), firstLoad = useRef(true), seenIds = useRef(new Set()), seenTrips = useRef(new Set());
@@ -921,8 +923,10 @@ function App() {
     const rd = window._db.ref(`trips/${activeTrip}`);
     rd.on("value", s => {
       const d = s.val() || {};
-      setFData(d);
-      setCity(c => c || Object.keys(d.cities || {})[0] || null);
+      startTransition(() => {
+        setFData(d);
+        setCity(c => c || Object.keys(d.cities || {})[0] || null);
+      });
     },
       err => {
         console.error(err);
@@ -953,12 +957,13 @@ function App() {
 
   // ── Aktif gezi verisi (TD = trip data)
   const TD = fData || {};
+  fDataRef.current = fData; // ref her zaman güncel fData'yı tutar (effect deps olmadan erişim için)
 
   // ── Gezi yönetimi
   const switchTrip = id => {
     setActiveTrip(id);
     localStorage.setItem("gezi_trip", id);
-    setCity(null); setRouteIds([]); setNearbyMode(false); setDayFilter(0);
+    setCity(null); setRouteIds([]); setNearbyMode(false); setDayFilter(0); setLocalVisited({});
     firstLoad.current = true;
   };
   const createTrip = (name, emoji, startDate, endDate) => {
@@ -1130,15 +1135,23 @@ function App() {
     }).catch(() => {});
   }, []);
 
+  // Harita için stabil mekan key — sadece mekan eklenip çıkarılınca değişir, visited/rota değişimlerinde tetiklenmez
+  const cityPlacesKey = useMemo(() => {
+    const ids = Object.values(TD.customPlaces || {}).filter(p => p.city === city).map(p => p.id).sort().join(",");
+    return `${activeTrip}|${city}|${ids}`;
+  }, [TD.customPlaces, city, activeTrip]);
+
   // ── Harita
   useEffect(() => {
-    if (tab !== "rota" || !fData) return;
+    if (tab !== "rota" || !fDataRef.current) return;
     const timer = setTimeout(() => {
-      const c = allCitiesNow.find(x => x.id === city);
+      const fd = fDataRef.current;
+      const cities = Object.values(fd?.cities || {});
+      const c = cities.find(x => x.id === city);
       const el = document.getElementById("leafmap");
       if (!c || !el) return;
       window._loadLeaflet().then(() => {
-      const places = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
+      const places = [...(STATIC_PLACES[city] || []), ...Object.values(fd?.customPlaces || {}).filter(p => p.city === city)];
       if (mapCityRef.current !== activeTrip + city) {
         if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; polyRef.current = null; userMarkerRef.current = null; memberMarkersRef.current = []; routeMarkersRef.current = []; }
         const m = L.map(el).setView([c.lat, c.lon], 14);
@@ -1181,7 +1194,7 @@ function App() {
       memberMarkersRef.current.forEach(mk => mapRef.current?.removeLayer(mk));
       memberMarkersRef.current = [];
       if (mapRef.current) {
-        Object.values(fData.members || {}).forEach(mb => {
+        Object.values(fd?.members || {}).forEach(mb => {
           if (!mb.loc || mb.uid === myUid) return;
           if (Date.now() - (mb.loc.ts || 0) > 12*3600*1000) return;
           const mk = L.circleMarker([mb.loc.lat, mb.loc.lon], { radius:9, fillColor:"#7B5EA7", color:"#fff", weight:3, fillOpacity:.9 })
@@ -1192,7 +1205,7 @@ function App() {
       }); // _loadLeaflet
     }, 80);
     return () => clearTimeout(timer);
-  }, [city, tab, fData, routeIds, userLoc, activeTrip]);
+  }, [city, tab, cityPlacesKey, routeIds, userLoc, activeTrip]);
   useEffect(() => () => { mapRef.current?.remove(); }, []);
 
   // ── Konum
@@ -1596,7 +1609,7 @@ function App() {
   // ── Türetilmiş gezi verileri
   const activeTripMeta = fData?.meta || {};
   const activeTripName = activeTripMeta.name || "Gezi";
-  const visited = TD.visited || {};
+  const visited = { ...(TD.visited || {}), ...localVisited };
   const placePhotos = TD.placePhotos || {};
   const placeDays = TD.placeDays || {};
   const polls = Object.values(TD.polls || {}).sort((a, b) => (b.createdAt || b.id || 0) - (a.createdAt || a.id || 0));
@@ -1622,6 +1635,11 @@ function App() {
   const tryRes = settle(expenses, participants, "TRY");
   const usdRes = settle(expenses, participants, "USD");
   const toggleRoute = id => setRouteIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const toggleVisited = (id, currentVal) => {
+    const next = !currentVal;
+    setLocalVisited(v => ({ ...v, [id]: next })); // anında güncelle
+    wr(`visited/${id}`, next);                    // Firebase'e yaz (arka planda)
+  };
   const pDay = p => placeDays[p.id] || 0;
   // Bütçe durumu
   const budgetSpent = budget ? expenses.filter(e => e.currency === budget.currency && !e.isSettlement).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) : 0;
@@ -1806,7 +1824,7 @@ function App() {
             return (
               <div key={p.id} className={`place-card${isV ? " vis" : ""}`} style={{border: isInRoute ? "2px solid var(--acc)" : "1.5px solid var(--border)"}}>
                 <div style={{display:"flex",gap:13,alignItems:"flex-start"}}>
-                  <div className={`check tap${isV ? " on" : ""}`} onClick={() => wr(`visited/${p.id}`, !isV)} style={{marginTop:3}}>
+                  <div className={`check tap${isV ? " on" : ""}`} onClick={() => toggleVisited(p.id, isV)} style={{marginTop:3}}>
                     {isV && <span style={{fontSize:15}}>✓</span>}
                   </div>
                   <div style={{flex:1,minWidth:0}}>
@@ -2002,7 +2020,7 @@ function App() {
                             padding:"4px 6px",borderRadius:6,flexShrink:0,
                             WebkitUserSelect:"none",userSelect:"none"}}>⠿</span>
                         <div className={`check tap${visited[p.id] ? " on" : ""}`} style={{width:22,height:22,borderRadius:7}}
-                          onClick={() => wr(`visited/${p.id}`, !visited[p.id])}>{visited[p.id] && <span style={{fontSize:12}}>✓</span>}</div>
+                          onClick={() => toggleVisited(p.id, visited[p.id])}>{visited[p.id] && <span style={{fontSize:12}}>✓</span>}</div>
                         <div style={{minWidth:0,flex:1}}>
                           <div style={{fontWeight:700,fontSize:13,textDecoration:visited[p.id]?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
                           <div style={{fontSize:10,color:"var(--muted)"}}>{p.cityEmoji} {p.cityName}</div>

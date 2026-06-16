@@ -1016,13 +1016,13 @@ function App() {
   const joinTrip = async (tripId) => {
     if (!tripId) return;
     try {
+      // Önce üyelik yaz (child rule izin veriyor), sonra meta oku (artık üye)
+      const memberEntry = { uid: myUid, name: userProfile?.name || "?", email: user?.email || "", role: "editor", joinedAt: Date.now() };
+      await window._db.ref(`trips/${tripId}/members/${myUid}`).set(memberEntry);
       const snap = await window._db.ref(`trips/${tripId}/meta`).once("value");
       const meta = snap.val();
       if (!meta) { toast("Geçersiz davet linki.", "❌"); return; }
-      const memberEntry = { uid: myUid, name: userProfile?.name || "?", email: user?.email || "", role: "editor", joinedAt: Date.now() };
-      const userTripEntry = { ...meta, role: "editor" };
-      await window._db.ref(`trips/${tripId}/members/${myUid}`).set(memberEntry);
-      await window._db.ref(`users/${myUid}/trips/${tripId}`).set(userTripEntry);
+      await window._db.ref(`users/${myUid}/trips/${tripId}`).set({ ...meta, role: "editor" });
       // URL ve sessionStorage'dan join parametresini temizle
       sessionStorage.removeItem('gezi_pending_join');
       try { const u = new URL(location.href); u.searchParams.delete("join"); history.replaceState({}, "", u.toString()); } catch {}
@@ -1067,10 +1067,12 @@ function App() {
     sessionStorage.removeItem('gezi_pending_join');
     (async () => {
       try {
+        // 1. Önce üyelik yaz — child rule (auth.uid===$uid) her zaman izinli
+        await window._db.ref(`trips/${tripId}/members/${uid}`).set({ uid, name: uName, email: uEmail, role: "editor", joinedAt: Date.now() });
+        // 2. Artık üye olduğumuz için parent .read kuralı geçiyor
         const snap = await window._db.ref(`trips/${tripId}/meta`).once("value");
         const meta = snap.val();
         if (!meta) { toast("Geçersiz davet linki.", "❌"); return; }
-        await window._db.ref(`trips/${tripId}/members/${uid}`).set({ uid, name: uName, email: uEmail, role: "editor", joinedAt: Date.now() });
         await window._db.ref(`users/${uid}/trips/${tripId}`).set({ ...meta, role: "editor" });
         try { const u = new URL(location.href); u.searchParams.delete("join"); history.replaceState({}, "", u.toString()); } catch {}
         localStorage.setItem("gezi_trip", tripId);

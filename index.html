@@ -1976,8 +1976,8 @@ function App() {
           if (!hasGroups) return <div style={{padding:"0 18px"}}>{renderCards(cityPlaces)}</div>;
 
           return <>
-            {touristPlaces.length > 0 && <AccordionGroup gKey="tourist" emoji="🏛️" label="Turistik Mekanlar" places={touristPlaces}/>}
-            {foodPlaces.length    > 0 && <AccordionGroup gKey="food"    emoji="🍽️" label="Yemek & Café"      places={foodPlaces}/>}
+            {touristPlaces.length > 0 && AccordionGroup({ gKey:"tourist", emoji:"🏛️", label:"Turistik Mekanlar", places:touristPlaces })}
+            {foodPlaces.length    > 0 && AccordionGroup({ gKey:"food",    emoji:"🍽️", label:"Yemek & Café",      places:foodPlaces })}
           </>;
         })()}
 

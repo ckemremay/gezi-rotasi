@@ -1334,44 +1334,28 @@ function App() {
   };
 
   // ── useMemo'lar (koşullu return'lerden önce)
-  // customPlaces'i stabil ref ile al — fData'nın tamamına bağlanmaktan kaçın
-  const customPlacesForCity = useMemo(
-    () => Object.values(TD.customPlaces || {}).filter(p => p.city === city),
-    [TD.customPlaces, city]
-  );
-  const allCustomPlaces = useMemo(
-    () => Object.values(TD.customPlaces || {}),
-    [TD.customPlaces]
-  );
   const nearbyPlaces = useMemo(() => {
     if (!fData || !userLoc || !nearbyMode) return null;
-    return customPlacesForCity
-      .map(p => ({ ...p, dist: haversine(userLoc.lat, userLoc.lon, p.lat || 0, p.lon || 0) }))
+    const cp = Object.values(TD.customPlaces || {}).filter(p => p.city === city);
+    return cp.map(p => ({ ...p, dist: haversine(userLoc.lat, userLoc.lon, p.lat || 0, p.lon || 0) }))
       .filter(p => p.dist < 2000).sort((a, b) => a.dist - b.dist);
-  }, [userLoc, nearbyMode, customPlacesForCity, fData]);
+  }, [userLoc, nearbyMode, city, fData, activeTrip]);
   const routeStats = useMemo(() => {
     if (!fData || routeIds.length < 2) return null;
-    const ordered = routeIds.map(id => customPlacesForCity.find(p => p.id === id)).filter(Boolean);
+    const allP = Object.values(TD.customPlaces || {}).filter(p => p.city === city);
+    const ordered = routeIds.map(id => allP.find(p => p.id === id)).filter(Boolean);
     let total = 0;
     for (let i = 0; i < ordered.length - 1; i++) {
       const a = ordered[i], b = ordered[i+1];
       if (a.lat && b.lat) total += haversine(a.lat, a.lon, b.lat, b.lon);
     }
     return { dist: total, min: walkMin(total), stops: routeIds.length, places: ordered };
-  }, [routeIds, customPlacesForCity, fData]);
+  }, [routeIds, city, fData, activeTrip]);
   const convResult = useMemo(() => {
     const amt = parseFloat(convAmt) || 0;
     const inEUR = amt / (rates[convBase] || 1);
     return Object.entries(rates).map(([cur, r]) => ({ cur, val: (inEUR * r).toFixed(2) }));
   }, [convAmt, convBase, rates]);
-  // Plan sekmesi — tüm şehirlerdeki mekanlar (erken return'lerden önce olması gerekiyor)
-  const allPlacesWithCity = useMemo(
-    () => Object.values(TD.customPlaces || {}).flatMap(p => {
-      const c = Object.values(TD.cities || {}).find(c => c.id === p.city);
-      return c ? [{ ...p, cityName: c.name, cityEmoji: c.emoji }] : [];
-    }),
-    [TD.customPlaces, TD.cities]
-  );
 
   // ── Giriş ekranı: üstte kart animasyonu, altta giriş paneli
   if (user === null) return (
@@ -1624,7 +1608,7 @@ function App() {
   const allCities = allCitiesNow;
   const customCities = TD.cities || {};
   const activeCityObj = allCities.find(c => c.id === city) || allCities[0];
-  const customCityPl = customPlacesForCity.slice().sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const customCityPl = Object.values(TD.customPlaces || {}).filter(p => p.city === city).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const cityPlaces = [...(STATIC_PLACES[city] || []), ...customCityPl];
   const cityVisCount = cityPlaces.filter(p => visited[p.id]).length;
   // Hesaplaşma katılımcıları
@@ -1969,11 +1953,14 @@ function App() {
             <div className="tabs" style={{position:"static",padding:"0 0 10px",background:"transparent"}}>
               <div className={`tap ctab${dayFilter === 0 ? " on" : ""}`} onClick={() => setDayFilter(0)}>Tümü</div>
               {Array.from({length:MAX_DAYS}, (_, i) => i+1)
-                .filter(d => allPlacesWithCity.some(p => pDay(p) === d))
+                .filter(d => Object.values(TD.customPlaces||{}).some(p => pDay(p) === d))
                 .map(d => <div key={d} className={`tap ctab${dayFilter === d ? " on" : ""}`} onClick={() => setDayFilter(d)}>{d}. gün</div>)}
             </div>
             {(() => {
-              const assigned = allPlacesWithCity.filter(p => pDay(p) > 0 && (dayFilter === 0 || pDay(p) === dayFilter));
+              const allP = allCities.flatMap(c =>
+                Object.values(TD.customPlaces||{}).filter(p => p.city === c.id)
+                  .map(p => ({ ...p, cityName: c.name, cityEmoji: c.emoji })));
+              const assigned = allP.filter(p => pDay(p) > 0 && (dayFilter === 0 || pDay(p) === dayFilter));
               if (!assigned.length) return (
                 <div className="empty"><div className="big">📅</div>
                   Henüz güne atanmış mekan yok.<br/>Rota sekmesindeki mekan kartlarından "Gün ata…" ile planla.</div>

@@ -91,7 +91,8 @@ button{font-family:'Inter',sans-serif;}
 .meta{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;opacity:.85;margin-top:10px;flex-wrap:wrap;}
 .sync-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);
   backdrop-filter:blur(8px);padding:5px 11px;border-radius:var(--r-full);font-size:10px;font-weight:700;letter-spacing:.04em;}
-.dot{width:6px;height:6px;border-radius:50%;}
+.dot{width:6px;height:6px;border-radius:50%;background:#5BD08C;animation:pulse 2.4s infinite;}
+.dot[data-syncing="1"]{background:#FFC107;}
 .avatar{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);
   border:1.5px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;
   font-weight:800;font-size:15px;cursor:pointer;flex-shrink:0;transition:transform var(--fast) var(--ease);}
@@ -770,7 +771,15 @@ function App() {
   // Veri
   const [fData, setFData] = useState(null);
   const [visitedData, setVisitedData] = useState({});
-  const [syncing, setSyncing] = useState(false);
+  const _syncDotRef = useRef(null);
+  const _syncTextRef = useRef(null);
+  const _setSyncing = (val) => {
+    if (_syncDotRef.current) {
+      _syncDotRef.current.dataset.syncing = val ? "1" : "0";
+      if (!val) _syncDotRef.current.style.background = navigator.onLine ? "#5BD08C" : "#FF8A75";
+    }
+    if (_syncTextRef.current) _syncTextRef.current.textContent = val ? "KAYDEDİLİYOR" : (navigator.onLine ? "CANLI" : "ÇEVRİMDIŞI");
+  };
   const [isOnline, setIsOnline] = useState(true);
   const [toasts, setToasts] = useState([]);
   const [notifPerm, setNotifPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "denied");
@@ -957,13 +966,13 @@ function App() {
           setAuthErr("Veri okunamadı: " + err.message);
         }
       });
-    return () => rd.off();
+    return () => { rd.off(); clearTimeout(_fDataTimer.current); };
   }, [user, activeTrip]);
 
   // ── Yazma fonksiyonları
   const wrRaw = (path, val) => {
-    setSyncing(true);
-    const done = () => setSyncing(false);
+    _setSyncing(true);
+    const done = () => _setSyncing(false);
     const p = window._db.ref(`trips/${activeTrip}/${path}`).set(val);
     p.then(done).catch(err => { console.error(err); toast("Kaydedilemedi! Bağlantıyı kontrol et.", "⚠️"); done(); });
     setTimeout(done, 2000);
@@ -1690,8 +1699,8 @@ function App() {
             <h1>{headerTitle}</h1>
             <div className="meta">
               <span className="sync-pill">
-                <span className="dot" style={{background:syncing?"#FFC107":isOnline?"#5BD08C":"#FF8A75",animation:syncing||isOnline?"pulse 2.4s infinite":"none"}}/>
-                {syncing ? "KAYDEDİLİYOR" : isOnline ? "CANLI" : "ÇEVRİMDIŞI"}
+                <span ref={_syncDotRef} data-syncing="0" className="dot"/>
+                <span ref={_syncTextRef}>{isOnline ? "CANLI" : "ÇEVRİMDIŞI"}</span>
               </span>
               <span>
                 {tab === "masraf" && budget ? `Bütçe: ${budgetSpent.toFixed(0)}/${budget.amount} ${SYM[budget.currency] || budget.currency}` :

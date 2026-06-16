@@ -769,6 +769,7 @@ function App() {
   const [pendingJoin, setPendingJoin] = useState(() => window._joinParam);
   // Veri
   const [fData, setFData] = useState(null);
+  const [visitedData, setVisitedData] = useState({});
   const [syncing, setSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [toasts, setToasts] = useState([]);
@@ -825,6 +826,8 @@ function App() {
   // Ref'ler
   const mapRef = useRef(null), polyRef = useRef(null), userMarkerRef = useRef(null);
   const fDataRef = useRef(null);
+  const _pendingFData = useRef(null);
+  const _fDataTimer = useRef(null);
   const memberMarkersRef = useRef([]);
   const routeMarkersRef = useRef([]);
   const mapCityRef = useRef(null), firstLoad = useRef(true), seenIds = useRef(new Set()), seenTrips = useRef(new Set());
@@ -923,10 +926,25 @@ function App() {
     const rd = window._db.ref(`trips/${activeTrip}`);
     rd.on("value", s => {
       const d = s.val() || {};
-      startTransition(() => {
-        setFData(d);
-        setCity(c => c || Object.keys(d.cities || {})[0] || null);
-      });
+      _pendingFData.current = d;
+      clearTimeout(_fDataTimer.current);
+      _fDataTimer.current = setTimeout(() => {
+        const next = _pendingFData.current;
+        const prev = fDataRef.current;
+        fDataRef.current = next;
+        // Only visited changed? Skip heavy setFData — prevents full re-render
+        const prevStr = prev ? JSON.stringify({ ...prev, visited: 0 }) : null;
+        const nextStr = JSON.stringify({ ...next, visited: 0 });
+        const onlyVisited = prevStr === nextStr;
+        startTransition(() => {
+          setVisitedData(next.visited || {});
+          setLocalVisited({});
+          if (!onlyVisited) {
+            setFData(next);
+            setCity(c => c || Object.keys(next?.cities || {})[0] || null);
+          }
+        });
+      }, 600);
     },
       err => {
         console.error(err);
@@ -963,7 +981,7 @@ function App() {
   const switchTrip = id => {
     setActiveTrip(id);
     localStorage.setItem("gezi_trip", id);
-    setCity(null); setRouteIds([]); setNearbyMode(false); setDayFilter(0); setLocalVisited({});
+    setCity(null); setRouteIds([]); setNearbyMode(false); setDayFilter(0); setLocalVisited({}); setVisitedData({});
     firstLoad.current = true;
   };
   const createTrip = (name, emoji, startDate, endDate) => {
@@ -1609,7 +1627,7 @@ function App() {
   // ── Türetilmiş gezi verileri
   const activeTripMeta = fData?.meta || {};
   const activeTripName = activeTripMeta.name || "Gezi";
-  const visited = { ...(TD.visited || {}), ...localVisited };
+  const visited = { ...visitedData, ...localVisited };
   const placePhotos = TD.placePhotos || {};
   const placeDays = TD.placeDays || {};
   const polls = Object.values(TD.polls || {}).sort((a, b) => (b.createdAt || b.id || 0) - (a.createdAt || a.id || 0));

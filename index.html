@@ -2616,50 +2616,42 @@ function App() {
             setCity(id);
             setShowAddCity(false);
             setNewCity({ name:"", emoji:"📍" });
-            // Overpass tourist spots — nodes + ways, broad tag coverage
+            // Google Places API (New) — tourist attractions by popularity
             try {
-              const r = 6000, ll = `${lat},${lon}`;
-              // Query both nodes and ways; center coords for ways via "out center"
-              const q = `[out:json][timeout:15];(
-                node["tourism"~"^(attraction|viewpoint)$"](around:${r},${ll});
-                way["tourism"~"^(attraction|viewpoint)$"](around:${r},${ll});
-                node["historic"~"^(monument|castle|ruins|building|bridge|city_gate|memorial|archaeological_site|fort|palace|tower)$"](around:${r},${ll});
-                way["historic"~"^(monument|castle|ruins|building|bridge|city_gate|memorial|archaeological_site|fort|palace|tower)$"](around:${r},${ll});
-                node["natural"~"^(peak|cliff|waterfall|cave_entrance|beach|hot_spring)$"](around:${r},${ll});
-                node["tourism"="museum"](around:${r},${ll});
-                way["tourism"="museum"](around:${r},${ll});
-              );out center 40;`;
-              const ov = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`).then(r => r.json());
-              const named = (ov.elements || []).filter(e => e.tags?.name);
-              // Deduplicate by name, prefer ways over nodes (ways have more detail)
-              const seen = new Map();
-              for (const e of named) {
-                const key = e.tags.name.toLowerCase();
-                if (!seen.has(key) || e.type === "way") seen.set(key, e);
-              }
-              const all = [...seen.values()].map(e => {
-                const elat = e.type === "way" ? e.center?.lat : e.lat;
-                const elon = e.type === "way" ? e.center?.lon : e.lon;
-                const t = e.tags;
-                const isMuseum = t.tourism === "museum" || t.amenity === "arts_centre";
-                const desc = t.historic || t.tourism || t.natural || "";
-                const url = elat && elon ? `https://www.google.com/maps/@${elat},${elon},17z?q=${encodeURIComponent(t.name)}` : `https://maps.google.com/?q=${encodeURIComponent(t.name)}`;
-                return { id:"place_"+e.id, name:t.name, desc, lat:elat, lon:elon, city:id, isMuseum, sortOrder:0, url };
+              const GPKEY = "AIzaSyA-IcAvybYBILp5Bs5ieMVhBQvlorpLe-c";
+              const resp = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Goog-Api-Key": GPKEY,
+                  "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.primaryTypeDisplayName"
+                },
+                body: JSON.stringify({
+                  includedTypes: ["tourist_attraction", "museum"],
+                  maxResultCount: 15,
+                  locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 6000 } },
+                  rankPreference: "POPULARITY"
+                })
               });
-              // Up to 3 museums + up to 9 landmarks, ranked by name length (shorter = more famous)
-              // Filter out entries missing coordinates (some Overpass ways have no center)
-              const withCoords = all.filter(s => s.lat && s.lon);
-              const museums = withCoords.filter(s => s.isMuseum).sort((a,b) => a.name.length - b.name.length).slice(0,3);
-              const landmarks = withCoords.filter(s => !s.isMuseum).sort((a,b) => a.name.length - b.name.length).slice(0,9);
-              const spots = [...landmarks, ...museums].map((s,i) => {
-                const { isMuseum, ...rest } = s;  // strip isMuseum
-                return { ...rest, sortOrder:i };
-              });
+              const data = await resp.json();
+              if (data.error) throw new Error(data.error.message);
+              const spots = (data.places || []).map((p, i) => ({
+                id: "place_" + p.id,
+                name: p.displayName?.text || "?",
+                desc: p.primaryTypeDisplayName?.text || "",
+                lat: p.location?.latitude,
+                lon: p.location?.longitude,
+                rating: p.rating || null,
+                reviewCount: p.userRatingCount || null,
+                city: id,
+                sortOrder: i,
+                url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.displayName?.text || "")}&query_place_id=${p.id}`
+              })).filter(s => s.lat && s.lon);
               if (spots.length > 0) {
                 setTouristSpots({ cityId: id, cityName, spots });
                 setTouristSel(new Set(spots.map(s => s.id)));
               }
-            } catch(err) { console.warn("Overpass error", err); }
+            } catch(err) { console.warn("Google Places error", err); }
           }}>Ekle</button>
         </Modal>
       )}
@@ -2693,7 +2685,10 @@ function App() {
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:700,fontSize:13}}>{s.name}</div>
-                    {s.desc && <div style={{fontSize:11,color:"var(--muted)",textTransform:"capitalize"}}>{s.desc}</div>}
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
+                      {s.desc && <div style={{fontSize:11,color:"var(--muted)",textTransform:"capitalize"}}>{s.desc}</div>}
+                      {s.rating && <div style={{fontSize:11,fontWeight:700,color:"#E2A93B"}}>⭐ {s.rating.toFixed(1)}{s.reviewCount ? <span style={{fontWeight:400,color:"var(--muted)"}}> ({s.reviewCount.toLocaleString()})</span> : null}</div>}
+                    </div>
                   </div>
                 </div>
               );
@@ -2709,9 +2704,11 @@ function App() {
                 Object.entries(s).forEach(([k, v]) => { if (v !== undefined) clean[k] = v; });
                 clean.sortOrder = i;
                 updates[`customPlaces/${s.id}`] = clean;
+                // Bildirim useEffect'inin her mekan için ayrı toast atmasını önle
+                seenIds.current.add("p" + activeTrip + s.id);
               });
               window._db.ref(`trips/${activeTrip}`).update(updates)
-                .then(() => toast(`${chosen.length} mekan eklendi!`, "🏛️"))
+                .then(() => toast(`${chosen.length} mekan rotaya eklendi!`, "🏛️"))
                 .catch(() => toast("Mekanlar eklenemedi.", "❌"));
               setTouristSpots(null);
               setTouristSel(new Set());

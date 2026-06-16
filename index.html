@@ -824,6 +824,8 @@ function App() {
   const [routeIds, setRouteIds] = useState([]);
   const [userLoc, setUserLoc] = useState(null);
   const [nearbyMode, setNearbyMode] = useState(false);
+  const [nearbyResults, setNearbyResults] = useState(null);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
   const [chartCur, setChartCur] = useState("EUR");
   const [convAmt, setConvAmt] = useState("100");
   const [convBase, setConvBase] = useState("EUR");
@@ -1205,7 +1207,7 @@ function App() {
   // ── Konum
   const getLocation = (share) => {
     if (!navigator.geolocation) { toast("Cihazın konum özelliği desteklenmiyor.", "❌"); return; }
-    navigator.geolocation.getCurrentPosition(pos => {
+    navigator.geolocation.getCurrentPosition(async pos => {
       const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
       setUserLoc(loc);
       if (share) {
@@ -1213,7 +1215,55 @@ function App() {
         toast("Konumun grupla paylaşıldı!", "📡");
       } else {
         setNearbyMode(true);
-        toast("Konumun bulundu! Yakındaki mekanlar listeleniyor.", "📍");
+        setNearbyLoading(true);
+        setNearbyResults(null);
+        try {
+          const GPKEY = "AIzaSyA-IcAvybYBILp5Bs5ieMVhBQvlorpLe-c";
+          const resp = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": GPKEY,
+              "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.primaryTypeDisplayName"
+            },
+            body: JSON.stringify({
+              includedTypes: ["tourist_attraction", "museum", "park", "landmark"],
+              maxResultCount: 20,
+              locationRestriction: { circle: { center: { latitude: loc.lat, longitude: loc.lon }, radius: 2000 } },
+              rankPreference: "DISTANCE"
+            })
+          });
+          const data = await resp.json();
+          if (data.error) throw new Error(data.error.message);
+          // Gezideki mekanların isim seti (küçük harf karşılaştırma için)
+          const tripPlaceNames = new Set(
+            Object.values(TD.customPlaces || {}).map(p => p.name?.toLowerCase().trim())
+          );
+          const tripPlaceIds = new Set(
+            Object.values(TD.customPlaces || {}).map(p => p.id)
+          );
+          const results = (data.places || []).map(p => {
+            const gid = "place_" + p.id;
+            const inTrip = tripPlaceIds.has(gid) || tripPlaceNames.has(p.displayName?.text?.toLowerCase().trim());
+            return {
+              id: gid,
+              name: p.displayName?.text || "?",
+              desc: p.primaryTypeDisplayName?.text || "",
+              lat: p.location?.latitude,
+              lon: p.location?.longitude,
+              rating: p.rating || null,
+              reviewCount: p.userRatingCount || null,
+              inTrip,
+              url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.displayName?.text || "")}&query_place_id=${p.id}`
+            };
+          }).filter(p => p.lat && p.lon);
+          setNearbyResults(results);
+          toast(`${results.length} turistik yer bulundu 📍`, "🗺️");
+        } catch(err) {
+          console.error("Nearby places error:", err);
+          toast("Yakındaki yerler yüklenemedi: " + (err.message || err), "❌");
+        }
+        setNearbyLoading(false);
       }
     }, () => toast("Konum izni reddedildi.", "❌"));
   };
@@ -1687,7 +1737,7 @@ function App() {
         {/* Aksiyonlar */}
         <div style={{padding:"0 18px",display:"flex",gap:8,marginBottom:12}}>
           <button className={`tap chip${nearbyMode ? " on" : ""}`} style={{flex:1}}
-            onClick={() => { if (!nearbyMode) getLocation(false); else { setNearbyMode(false); setUserLoc(null); } }}>
+            onClick={() => { if (!nearbyMode) getLocation(false); else { setNearbyMode(false); setUserLoc(null); setNearbyResults(null); setNearbyLoading(false); } }}>
             {nearbyMode ? "✕ Kapat" : "📍 Yakınımdakiler"}
           </button>
           <button className={`tap chip${routeMode ? " on" : ""}`} style={{flex:1}}
@@ -1697,19 +1747,30 @@ function App() {
         </div>
 
         {/* Yakındakiler */}
-        {nearbyMode && nearbyPlaces !== null && (
+        {nearbyMode && (
           <div style={{padding:"0 18px",marginBottom:12}}>
-            <div className="sec-title">{nearbyPlaces.length > 0 ? `${nearbyPlaces.length} mekan 2km içinde` : "2km içinde mekan bulunamadı"}</div>
-            {nearbyPlaces.map(p => (
-              <div key={p.id} className="list-row">
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:700,fontSize:14}}>{p.name}</div>
-                  <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{fmtDist(p.dist)} · ~{walkMin(p.dist)} dk yürüme</div>
-                </div>
-                <a href={p.url || `https://maps.google.com/?q=${encodeURIComponent(p.name)}`} target="_blank" rel="noreferrer"
-                  style={{fontSize:11,color:"var(--acc)",fontWeight:700,background:"var(--acc-soft)",padding:"5px 10px",borderRadius:8,flexShrink:0,textDecoration:"none"}}>Git →</a>
-              </div>
-            ))}
+            {nearbyLoading && <div style={{textAlign:"center",padding:"18px 0",fontSize:13,color:"var(--muted)"}}>🔍 Yakındaki yerler aranıyor…</div>}
+            {!nearbyLoading && nearbyResults !== null && (
+              <>
+                <div className="sec-title">{nearbyResults.length > 0 ? `2km içinde ${nearbyResults.length} turistik yer` : "2km içinde turistik yer bulunamadı"}</div>
+                {nearbyResults.map(p => (
+                  <div key={p.id} className="list-row" style={{alignItems:"flex-start",gap:10}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:700,fontSize:14}}>{p.name}</span>
+                        {p.inTrip && <span style={{fontSize:10,fontWeight:800,color:"var(--green)",background:"rgba(62,138,96,.1)",padding:"2px 7px",borderRadius:99}}>✓ listende var</span>}
+                      </div>
+                      <div style={{fontSize:11,color:"var(--muted)",marginTop:2,display:"flex",gap:8,flexWrap:"wrap"}}>
+                        {p.desc && <span style={{textTransform:"capitalize"}}>{p.desc}</span>}
+                        {p.rating && <span style={{color:"#E2A93B",fontWeight:700}}>⭐ {p.rating.toFixed(1)}{p.reviewCount ? ` (${p.reviewCount.toLocaleString()})` : ""}</span>}
+                      </div>
+                    </div>
+                    <a href={p.url} target="_blank" rel="noreferrer"
+                      style={{fontSize:11,color:"var(--acc)",fontWeight:700,background:"var(--acc-soft)",padding:"5px 10px",borderRadius:8,flexShrink:0,textDecoration:"none",marginTop:2}}>Git →</a>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
 

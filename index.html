@@ -2651,7 +2651,7 @@ function App() {
                 setTouristSpots({ cityId: id, cityName, spots });
                 setTouristSel(new Set(spots.map(s => s.id)));
               }
-            } catch(err) { console.warn("Google Places error", err); }
+            } catch(err) { console.error("Google Places error", err); toast("Mekan önerileri yüklenemedi: " + (err.message || err), "❌"); }
           }}>Ekle</button>
         </Modal>
       )}

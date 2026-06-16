@@ -1782,17 +1782,15 @@ function App() {
         </div>
 
         {/* Aksiyonlar */}
-        <div style={{padding:"0 18px",display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
-          <button className={`tap chip${nearbyMode ? " on" : ""}`} style={{flex:1,minWidth:"45%"}}
+        <div style={{padding:"0 18px",display:"flex",gap:8,marginBottom:12}}>
+          <button className={`tap chip${nearbyMode ? " on" : ""}`} style={{flex:1}}
             onClick={() => { if (!nearbyMode) getLocation(false); else { setNearbyMode(false); setUserLoc(null); setNearbyResults(null); setNearbyLoading(false); } }}>
             {nearbyMode ? "✕ Kapat" : "📍 Yakınımdakiler"}
           </button>
-          <button className={`tap chip${routeMode ? " on" : ""}`} style={{flex:1,minWidth:"45%"}}
+          <button className={`tap chip${routeMode ? " on" : ""}`} style={{flex:1}}
             onClick={() => { setRouteMode(p => !p); if (routeMode) setRouteIds([]); }}>
             {routeMode ? "✕ Rotayı Temizle" : "🗺️ Rota Çiz"}
           </button>
-          <button className="tap chip" style={{flex:1,minWidth:"45%"}} onClick={() => fetchPlaceSuggestions("tourist")}>🏛️ Turistik Öneriler</button>
-          <button className="tap chip" style={{flex:1,minWidth:"45%"}} onClick={() => fetchPlaceSuggestions("food")}>🍽️ Yemek & Café</button>
         </div>
 
         {/* Yakındakiler */}
@@ -2837,64 +2835,112 @@ function App() {
             setCity(id);
             setShowAddCity(false);
             setNewCity({ name:"", emoji:"📍" });
-            toast(`${cityName} eklendi! 🏛️ Turistik veya 🍽️ Yemek butonlarıyla mekan önerilerini yükle.`, "📍");
+            // Her iki kategoriyi paralel çek
+            const GPKEY = "AIzaSyA-IcAvybYBILp5Bs5ieMVhBQvlorpLe-c";
+            const fetchCat = async (types, maxResults, catType) => {
+              const resp = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+                method: "POST",
+                headers: { "Content-Type":"application/json", "X-Goog-Api-Key":GPKEY,
+                  "X-Goog-FieldMask":"places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.primaryTypeDisplayName" },
+                body: JSON.stringify({
+                  includedTypes: types, maxResultCount: maxResults,
+                  locationRestriction: { circle: { center:{ latitude:lat, longitude:lon }, radius:6000 } },
+                  rankPreference: "POPULARITY"
+                })
+              });
+              const data = await resp.json();
+              if (data.error) throw new Error(data.error.message);
+              return (data.places||[]).map((p,i) => ({
+                id:"place_"+p.id, name:p.displayName?.text||"?",
+                desc:p.primaryTypeDisplayName?.text||"",
+                lat:p.location?.latitude, lon:p.location?.longitude,
+                rating:p.rating||null, reviewCount:p.userRatingCount||null,
+                category:catType, city:id, sortOrder:i,
+                url:`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.displayName?.text||"")}&query_place_id=${p.id}`
+              })).filter(s => s.lat && s.lon);
+            };
+            try {
+              const [touristSpotsFetched, foodSpotsFetched] = await Promise.all([
+                fetchCat(["tourist_attraction","museum"], 15, "tourist"),
+                fetchCat(["restaurant","cafe","bakery"], 10, "food")
+              ]);
+              if (touristSpotsFetched.length > 0 || foodSpotsFetched.length > 0) {
+                setTouristSpots({ cityId:id, cityName, touristSpots:touristSpotsFetched, foodSpots:foodSpotsFetched });
+                setTouristSel(new Set([...touristSpotsFetched, ...foodSpotsFetched].map(s => s.id)));
+              }
+            } catch(err) { console.error("Places error:", err); toast("Mekan önerileri yüklenemedi: "+(err.message||err), "❌"); }
           }}>Ekle</button>
         </Modal>
       )}
 
       {touristSpots && (
         <Modal onClose={() => { setTouristSpots(null); setTouristSel(new Set()); }}>
-          <ModalHead title={touristSpots.category === "food" ? "🍽️ Yemek & Café Önerileri" : "🏛️ Turistik Mekan Önerileri"} onClose={() => { setTouristSpots(null); setTouristSel(new Set()); }}/>
-          <div style={{fontSize:13,color:"var(--muted)",marginBottom:10}}>
-            <b>{touristSpots.cityName}</b> için {touristSpots.spots.length} yer bulundu.
-            <span style={{marginLeft:6,color:"var(--pri)",fontWeight:700,cursor:"pointer"}}
-              onClick={() => setTouristSel(touristSel.size === touristSpots.spots.length ? new Set() : new Set(touristSpots.spots.map(s => s.id)))}>
-              {touristSel.size === touristSpots.spots.length ? "Tümünü kaldır" : "Tümünü seç"}
-            </span>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16,maxHeight:300,overflowY:"auto"}}>
-            {touristSpots.spots.map(s => {
+          <ModalHead title="📍 Mekan Önerileri" onClose={() => { setTouristSpots(null); setTouristSel(new Set()); }}/>
+          <div style={{fontSize:13,color:"var(--muted)",marginBottom:14}}><b>{touristSpots.cityName}</b> için öneriler</div>
+          {(() => {
+            const allSpots = [...(touristSpots.touristSpots||[]), ...(touristSpots.foodSpots||[])];
+            const sections = [
+              { key:"tourist", emoji:"🏛️", label:"Turistik Mekanlar", spots: touristSpots.touristSpots||[] },
+              { key:"food",    emoji:"🍽️", label:"Yemek & Café",      spots: touristSpots.foodSpots||[]    },
+            ].filter(s => s.spots.length > 0);
+
+            const SpotItem = ({ s }) => {
               const checked = touristSel.has(s.id);
               return (
-                <div key={s.id} className="tap" onClick={() => {
-                  const ns = new Set(touristSel);
-                  checked ? ns.delete(s.id) : ns.add(s.id);
-                  setTouristSel(ns);
-                }} style={{background: checked ? "var(--acc-soft)" : "var(--bg2)", borderRadius:10, padding:"9px 12px",
-                  fontSize:13, display:"flex", alignItems:"center", gap:10,
-                  border: checked ? "1.5px solid var(--acc)" : "1.5px solid transparent"}}>
+                <div className="tap" onClick={() => { const ns=new Set(touristSel); checked?ns.delete(s.id):ns.add(s.id); setTouristSel(ns); }}
+                  style={{background:checked?"var(--acc-soft)":"transparent",borderRadius:10,padding:"8px 10px",
+                    display:"flex",alignItems:"center",gap:10,border:checked?"1.5px solid var(--acc)":"1.5px solid transparent"}}>
                   <div style={{width:20,height:20,borderRadius:6,border:"2px solid",flexShrink:0,
-                    borderColor: checked ? "var(--acc)" : "var(--border)",
-                    background: checked ? "var(--acc)" : "transparent",
+                    borderColor:checked?"var(--acc)":"var(--border)",background:checked?"var(--acc)":"transparent",
                     display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:800}}>
                     {checked && "✓"}
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:700,fontSize:13}}>{s.name}</div>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
-                      {s.desc && <div style={{fontSize:11,color:"var(--muted)",textTransform:"capitalize"}}>{s.desc}</div>}
-                      {s.rating && <div style={{fontSize:11,fontWeight:700,color:"#E2A93B"}}>⭐ {s.rating.toFixed(1)}{s.reviewCount ? <span style={{fontWeight:400,color:"var(--muted)"}}> ({s.reviewCount.toLocaleString()})</span> : null}</div>}
+                    <div style={{display:"flex",gap:6,marginTop:1,flexWrap:"wrap"}}>
+                      {s.desc && <span style={{fontSize:11,color:"var(--muted)",textTransform:"capitalize"}}>{s.desc}</span>}
+                      {s.rating && <span style={{fontSize:11,fontWeight:700,color:"#E2A93B"}}>⭐ {s.rating.toFixed(1)}{s.reviewCount?` (${s.reviewCount.toLocaleString()})`:""}</span>}
                     </div>
                   </div>
                 </div>
               );
-            })}
-          </div>
+            };
+
+            return (
+              <div style={{maxHeight:"60vh",overflowY:"auto",marginBottom:16,display:"flex",flexDirection:"column",gap:16}}>
+                {sections.map(sec => (
+                  <div key={sec.key}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,paddingBottom:6,borderBottom:"1.5px solid var(--border)"}}>
+                      <span style={{fontWeight:800,fontSize:13}}>{sec.emoji} {sec.label} ({sec.spots.length})</span>
+                      <span className="tap" style={{fontSize:11,color:"var(--pri)",fontWeight:700}} onClick={() => {
+                        const ns = new Set(touristSel);
+                        const allChecked = sec.spots.every(s => ns.has(s.id));
+                        sec.spots.forEach(s => allChecked ? ns.delete(s.id) : ns.add(s.id));
+                        setTouristSel(ns);
+                      }}>{sec.spots.every(s => touristSel.has(s.id)) ? "Tümünü kaldır" : "Tümünü seç"}</span>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                      {sec.spots.map(s => <SpotItem key={s.id} s={s}/>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           <button className="btn-pri tap" style={{width:"100%",marginBottom:8}} disabled={touristSel.size === 0}
             onClick={() => {
-              const chosen = touristSpots.spots.filter(s => touristSel.has(s.id));
+              const allSpots = [...(touristSpots.touristSpots||[]), ...(touristSpots.foodSpots||[])];
+              const chosen = allSpots.filter(s => touristSel.has(s.id));
               const updates = {};
               chosen.forEach((s, i) => {
-                // Clean: remove undefined fields before Firebase write
                 const clean = {};
                 Object.entries(s).forEach(([k, v]) => { if (v !== undefined) clean[k] = v; });
                 clean.sortOrder = i;
                 updates[`customPlaces/${s.id}`] = clean;
-                // Bildirim useEffect'inin her mekan için ayrı toast atmasını önle
                 seenIds.current.add("p" + activeTrip + s.id);
               });
               window._db.ref(`trips/${activeTrip}`).update(updates)
-                .then(() => toast(`${chosen.length} mekan rotaya eklendi!`, "🏛️"))
+                .then(() => toast(`${chosen.length} mekan eklendi!`, "📍"))
                 .catch(() => toast("Mekanlar eklenemedi.", "❌"));
               setTouristSpots(null);
               setTouristSel(new Set());

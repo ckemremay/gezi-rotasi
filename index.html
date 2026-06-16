@@ -1149,7 +1149,7 @@ function App() {
       if (mapCityRef.current !== activeTrip + city) {
         if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; polyRef.current = null; userMarkerRef.current = null; memberMarkersRef.current = []; routeMarkersRef.current = []; }
         const m = L.map(el).setView([c.lat, c.lon], 14);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM" }).addTo(m);
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap © CARTO", subdomains: "abcd", maxZoom: 19 }).addTo(m);
         places.forEach(p => {
           if (!p.lat || !p.lon) return;
           L.circleMarker([p.lat, p.lon], { radius:8, fillColor:"#4F46E5", color:"#fff", weight:3, fillOpacity:.9 })

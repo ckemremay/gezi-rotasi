@@ -1149,7 +1149,7 @@ function App() {
       if (mapCityRef.current !== activeTrip + city) {
         if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; polyRef.current = null; userMarkerRef.current = null; memberMarkersRef.current = []; routeMarkersRef.current = []; }
         const m = L.map(el).setView([c.lat, c.lon], 14);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap © CARTO", subdomains: "abcd", maxZoom: 19 }).addTo(m);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM" }).addTo(m);
         places.forEach(p => {
           if (!p.lat || !p.lon) return;
           L.circleMarker([p.lat, p.lon], { radius:8, fillColor:"#4F46E5", color:"#fff", weight:3, fillOpacity:.9 })
@@ -1294,7 +1294,7 @@ function App() {
     if (!fData || !userLoc || !nearbyMode) return null;
     const cp = [...(STATIC_PLACES[city] || []), ...Object.values(TD.customPlaces || {}).filter(p => p.city === city)];
     return cp.map(p => ({ ...p, dist: haversine(userLoc.lat, userLoc.lon, p.lat || 0, p.lon || 0) }))
-      .filter(p => p.dist < 600).sort((a, b) => a.dist - b.dist);
+      .filter(p => p.dist < 2000).sort((a, b) => a.dist - b.dist);
   }, [userLoc, nearbyMode, city, fData, activeTrip]);
   const routeStats = useMemo(() => {
     if (!fData || routeIds.length < 2) return null;
@@ -1699,7 +1699,7 @@ function App() {
         {/* Yakındakiler */}
         {nearbyMode && nearbyPlaces !== null && (
           <div style={{padding:"0 18px",marginBottom:12}}>
-            <div className="sec-title">{nearbyPlaces.length > 0 ? `${nearbyPlaces.length} mekan 600m içinde` : "600m içinde mekan bulunamadı"}</div>
+            <div className="sec-title">{nearbyPlaces.length > 0 ? `${nearbyPlaces.length} mekan 2km içinde` : "2km içinde mekan bulunamadı"}</div>
             {nearbyPlaces.map(p => (
               <div key={p.id} className="list-row">
                 <div style={{flex:1}}>

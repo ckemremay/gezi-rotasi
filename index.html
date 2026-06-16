@@ -1227,7 +1227,7 @@ function App() {
               "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.primaryTypeDisplayName"
             },
             body: JSON.stringify({
-              includedTypes: ["tourist_attraction", "museum", "park", "landmark"],
+              includedTypes: ["tourist_attraction", "museum", "art_gallery", "park"],
               maxResultCount: 20,
               locationRestriction: { circle: { center: { latitude: loc.lat, longitude: loc.lon }, radius: 2000 } },
               rankPreference: "DISTANCE"

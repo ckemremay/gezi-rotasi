@@ -996,16 +996,22 @@ function App() {
     setCity(null); setRouteIds([]); setNearbyMode(false); setDayFilter(0); setLocalVisited({}); setVisitedData({});
     firstLoad.current = true;
   };
-  const createTrip = (name, emoji, startDate, endDate) => {
+  const createTrip = async (name, emoji, startDate, endDate) => {
     const id = "trip_" + newId();
     const meta = { id, name, emoji: emoji || "✈️", ownerUid: myUid, createdAt: Date.now(), ...(startDate && { startDate }), ...(endDate && { endDate }) };
     const memberEntry = { uid: myUid, name: userProfile?.name || "?", email: user?.email || "", role: "owner", joinedAt: Date.now() };
-    const userTripEntry = { ...meta, role: "owner" };
-    window._db.ref(`trips/${id}/meta`).set(meta);
-    window._db.ref(`trips/${id}/members/${myUid}`).set(memberEntry);
-    window._db.ref(`users/${myUid}/trips/${id}`).set(userTripEntry);
-    switchTrip(id);
-    toast("Gezi oluşturuldu! 🎉", "✈️");
+    try {
+      // 1. Önce member yaz — child rule (auth.uid===$uid) parent'ı override eder
+      await window._db.ref(`trips/${id}/members/${myUid}`).set(memberEntry);
+      // 2. Artık üye var → parent write rule geçiyor, meta yazılabilir
+      await window._db.ref(`trips/${id}/meta`).set(meta);
+      // 3. Kullanıcı index'i (kendi node'u, her zaman izinli)
+      window._db.ref(`users/${myUid}/trips/${id}`).set({ ...meta, role: "owner" });
+      switchTrip(id);
+      toast("Gezi oluşturuldu! 🎉", "✈️");
+    } catch(e) {
+      toast("Gezi oluşturulamadı: " + e.message, "❌");
+    }
   };
   const joinTrip = async (tripId) => {
     if (!tripId) return;
